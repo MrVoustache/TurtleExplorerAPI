@@ -369,6 +369,7 @@ maps.UNKNOWN_BLOCK_TYPE = "<unknown>"
 ---@field blocks {Position: string} A table mapping positions to the type of block at that position, which can be any string representing a block type.
 ---@field size number The size of the map, which is the number of positions with known status or block type.
 ---@field generate_events boolean If events should be generated in case of map update.
+---@field change_callback fun(position: Position, old_status: number?, old_block: string?, new_status: number?, new_block: string?)? A function called by set_position and del_position.
 local Map = {}
 maps.Map = Map
 
@@ -376,12 +377,14 @@ Map.__index = Map
 Map.__name = "Map"
 
 --- Creates a new Map object.
-function Map:new()
+---@param change_callback fun(position: Position, old_status: number?, old_block: string?, new_status: number?, new_block: string?)? An optional function that will be called when the map is updated.
+function Map:new(change_callback)
     local map = setmetatable({}, Map)
     map.status = {}
     map.blocks = {}
     map.size = 0
     map.generate_events = false
+    map.change_callback = change_callback
     return map
 end
 
@@ -416,17 +419,19 @@ function Map:set_position(pos, status, block_type)
     if status ~= maps.EMPTY and status ~= maps.SOLID and status ~= maps.LIQUID and status ~= maps.BARRIER then
         error("status must be either EMPTY(" .. maps.EMPTY .. "), SOLID(" .. maps.SOLID .. "), LIQUID(" .. maps.LIQUID .. "), or BARRIER(" .. maps.BARRIER .. ")", 2)
     end
-    if self.status[pos:hash()] == nil then
+    local h = pos:hash()
+    if self.status[h] == nil then
         self.size = self.size + 1
     end
-    self.status[pos:hash()] = status
+    local old_status, old_block = self.status[h], self.blocks[h]
+    self.status[h] = status
     if block_type ~= nil then
-        self.blocks[pos:hash()] = block_type
+        self.blocks[h] = block_type
     else
-        self.blocks[pos:hash()] = nil
+        self.blocks[h] = nil
     end
-    if self.generate_events then
-        os.queueEvent("map_update", self, pos)
+    if self.change_callback ~= nil then
+        self.change_callback(pos, old_status, old_block, status, block_type)
     end
 end
 
@@ -438,16 +443,17 @@ function Map:del_position(pos)
     if type(pos) ~= "table" or getmetatable(pos) ~= Position then
         error("pos must be a Position object", 2)
     end
+    local h = pos:hash()
     local old_status, old_block = nil, nil
-    if self.status[pos:hash()] ~= nil then
-        old_status = self.status[pos:hash()]
-        old_block = self.blocks[pos:hash()]
-        self.status[pos:hash()] = nil
-        self.blocks[pos:hash()] = nil
+    if self.status[h] ~= nil then
+        old_status = self.status[h]
+        old_block = self.blocks[h]
+        self.status[h] = nil
+        self.blocks[h] = nil
         self.size = self.size - 1
     end
-    if self.generate_events then
-        os.queueEvent("map_update", self, pos)
+    if self.change_callback ~= nil then
+        self.change_callback(pos, old_status, old_block, nil, nil)
     end
     return old_status, old_block
 end
@@ -460,7 +466,8 @@ function Map:get_position(pos)
     if type(pos) ~= "table" or getmetatable(pos) ~= Position then
         error("pos must be a Position object", 2)
     end
-    return self.status[pos:hash()], self.blocks[pos:hash()]
+    local h = pos:hash()
+    return self.status[h], self.blocks[h]
 end
 
 --- Implements map[position]. Equivalent to map:getPosition(position).
@@ -526,11 +533,19 @@ end
 ---@param destination_pos Position The destination position.
 ---@param destination_direction number? The optional destination orientation. Set to nil to just reach the destination position no matter the destination orientation.
 ---@param condition (fun(map: Map, position: Position) : boolean)? A function to check that a given position can be traversed. Defaults to checking that that position is empty and known.
+---@param costs {turning: number, forward: number, up: number, down: number}? A table with values for "turning", "forward", "up" and "down" indicating the costs of these movements for computing the path. Defaults to 4 for moving and 3 for turning
 ---@return Position[]? path A shortest path from the starting point to the destination if a valid one exists (nil otherwise).
-function Map:find_path(start_pos, start_direction, destination_pos, destination_direction, condition)
+function Map:find_path(start_pos, start_direction, destination_pos, destination_direction, condition, costs)
     if condition == nil then
         condition = maps.DEFAULT_PATH_CONDITION_CHECK
     end
+    if costs == nil then
+        costs = {}
+    end
+    local turning_cost = costs.turning ~= nil and costs.turning or 3
+    local up_cost = costs.up ~= nil and costs.up or 4
+    local down_cost = costs.down ~= nil and costs.down or 4
+    local forward_cost = costs.forward ~= nil and costs.forward or 4
 
     if not condition(self, destination_pos) then
         error("cannot reach destination position as it is rejected by the condition", 2)
@@ -637,32 +652,21 @@ function Map:find_path(start_pos, start_direction, destination_pos, destination_
         local next_pos = current_pos:above()
         if check_pos(next_pos) then
             local next_hash = hash_pair(next_pos, current_dir)
-            evaluate_and_update_tentative(current_pos, current_dir, next_pos, current_dir, next_hash, cost[current_hash] + 4)
+            evaluate_and_update_tentative(current_pos, current_dir, next_pos, current_dir, next_hash, cost[current_hash] + up_cost)
         end
 
         -- Below
         local next_pos = current_pos:below()
         if check_pos(next_pos) then
             local next_hash = hash_pair(next_pos, current_dir)
-            evaluate_and_update_tentative(current_pos, current_dir, next_pos, current_dir, next_hash, cost[current_hash] + 4)
+            evaluate_and_update_tentative(current_pos, current_dir, next_pos, current_dir, next_hash, cost[current_hash] + down_cost)
         end
 
         -- Forward
-        local next_pos
-        if current_dir == maps.EAST then
-            next_pos = current_pos:east()
-        elseif current_dir == maps.SOUTH then
-            next_pos = current_pos:south()
-        elseif current_dir == maps.WEST then
-            next_pos = current_pos:west()
-        elseif current_dir == maps.NORTH then
-            next_pos = current_pos:north()
-        else
-            error("should not have ended up there", 2)
-        end
+        local next_pos = current_pos:in_direction(current_dir)
         if check_pos(next_pos) then
             local next_hash = hash_pair(next_pos, current_dir)
-            evaluate_and_update_tentative(current_pos, current_dir, next_pos, current_dir, next_hash, cost[current_hash] + 4)
+            evaluate_and_update_tentative(current_pos, current_dir, next_pos, current_dir, next_hash, cost[current_hash] + forward_cost)
         end
 
         -- Right
@@ -671,7 +675,7 @@ function Map:find_path(start_pos, start_direction, destination_pos, destination_
             next_dir = 0
         end
         local next_hash = hash_pair(current_pos, next_dir)
-        evaluate_and_update_tentative(current_pos, current_dir, current_pos, next_dir, next_hash, cost[current_hash] + 3)
+        evaluate_and_update_tentative(current_pos, current_dir, current_pos, next_dir, next_hash, cost[current_hash] + turning_cost)
 
         -- Left
         local next_dir = current_dir - 1
@@ -679,7 +683,7 @@ function Map:find_path(start_pos, start_direction, destination_pos, destination_
             next_dir = 3
         end
         local next_hash = hash_pair(current_pos, next_dir)
-        evaluate_and_update_tentative(current_pos, current_dir, current_pos, next_dir, next_hash, cost[current_hash] + 3)
+        evaluate_and_update_tentative(current_pos, current_dir, current_pos, next_dir, next_hash, cost[current_hash] + turning_cost)
 
         current_hash = to_do_heap:pop()
     end

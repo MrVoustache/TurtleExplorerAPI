@@ -1,0 +1,92 @@
+--- This module defines tasks that can be accomplished by turtles in different locations of the world, with different priorities.
+
+_G.tasker = {}
+
+tasker.LIFE_OR_DEATH = -1       --- The task cannot wait, it is a life or death matter. The turtle may go through liquids or unexplored regions.
+tasker.URGENT = 0               --- The task must be performed as quickly as possible. The turtle cannot stop to perform any other task along the journey to the actual matter.
+tasker.QUICK = 1                --- The task is to important but the turtle can stop to handle other tasks along the way as long as they do not imply that the turtle moves.
+tasker.AROUND = 2               --- The task is not urgent and the turtle can turn around (but not move up/down/forward/backward) to perform another task along the way.
+tasker.NEAR = 3                 --- The task can wait and the turtle may move at most 2 blocks away to perform other tasks along the way.
+
+
+
+
+
+---@class Task A task to perform somewhere with a priority and a status.
+---@field active_map Map? The map the holds the knowledge required to perform the task. Will be given by the scheduler.
+---@field check_on_move boolean If checking if the task can be accomplished is useful on turtle unrelated move. (Useful for tasks that may be done in many positions, but don't require to move.)
+---@field enabled boolean If the task is currently enabled or not. Note that an enabled task must return at least one position when asked.
+---@field identifier integer A unique identifier for the task.
+---@field timing_cost integer A value indicating if the turtle has time to perform other tasks along the way when getting to the location of the task. Can be one of tasker.URGENT, tasker.QUICK, tasker.AROUND, tasker.NEAR or tasker.LIFE_OR_DEATH.
+---@field priority integer A value used to sort the different tasks. A task with lower priority will be executed before others.
+---@field path_costs {turning: number, up: number, down: number, forward: number}? A table indicating the costs for building a path to a target destination od the task.
+local Task = {}
+Task.__name = "Task"
+tasker.Task = Task
+local identifier = 0
+
+--- Creates a new task
+function Task:new()
+    Task.__index = Task
+    local task = {}
+    setmetatable(task, self or Task)
+    task.check_on_move = false
+    identifier = identifier + 1
+    task.identifier = identifier
+    task.enabled = false
+    task.timing_cost = tasker.NEAR
+    task.priority = 0
+    return task
+end
+
+--- Tries to perform the task at the given position. If the position is not right, simply return false. If check_on_move is true, everytime the turtle moves, this function will be called.
+---@param pos Position The current turtle position.
+---@param direction number The current turtle direction.
+---@param freedom integer? One of the three secondary objective limitation constants (tasker.QUICK, tasker.AROUND, tasker.NEAR) if the task was is being run as a secondary objective, or nil if the turtle went to the current position specifically for this task.
+---@return boolean success If the entire task succeeded.
+function Task:perform(pos, direction, freedom)
+    error("subclasses of task must override this method", 2)
+end
+
+--- A function to call as a background coroutine, listening for events that should run while the task exists. Note that this thread will continue to run even if the task finishes, and is responsible for stopping on its own when the task finishes.
+---@param map Map The map that this task is running on.
+function Task:background_handler(map)
+end
+
+--- Returns an array of positions in which the task should lead the turtle to. If the turtle
+---@param current_position Position The current position of the turtle at the time of the request.
+---@param current_direction number The current orientation of the turtle at the time of the request.
+---@return Position[] positions Most of the positions (you can limit it to the closest for example).
+---@return number[]? directions If necessary, the directions in which the turtle should look at when reaching any of the corresponding positions. It can be a table with number indexes only on the position indexes that require a specific orientation.
+function Task:positions(current_position, current_direction)
+    error("subclasses of task must override this method", 2)
+end
+
+--- Disables the task. It is removed from the scheduler's queue and put in its idle list.
+function Task:disable()
+    os.queueEvent("task_disabled", self)
+end
+
+--- Enables the task. It will be moved from the scheduler's idle list to its queue.
+function Task:enable()
+    os.queueEvent("task_enabled", self)
+end
+
+--- Changes a tasks's priority.
+---@param new_priority integer The new task's priority.
+function Task:change_priority(new_priority)
+    if type(new_priority) ~= "number" then
+        error("expected number, got '"..type(new_priority).."'", 2)
+    end
+    os.queueEvent("task_priority", self, new_priority)
+end
+
+--- Registers the task to be run by the scheduler. It is disabled at first.
+function Task:register()
+    os.queueEvent("task_register", self)
+end
+
+--- Called by the scheduler when the map knowledge changes on a given position. This function is only called when a map is or gets linked to the task.
+---@param position Position? The position on which the map has changed. Is nil when the map is affected to the task.
+function Task:on_map_update(position)
+end

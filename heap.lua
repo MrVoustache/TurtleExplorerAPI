@@ -7,7 +7,8 @@ _G.heap = {}
 ---@field heap string[]
 ---@field priorities {string: number}
 ---@field indices {string: number}
----@field compare fun(a: T, b: T): boolean
+---@field locked boolean
+---@field postponed {method: string, arguments:any[]}[]
 local Heap = {}
 heap.Heap = Heap
 Heap.__index = Heap
@@ -26,34 +27,45 @@ function Heap:new(hash)
     heap.heap = {}
     heap.priorities = {}
     heap.indices = {}
+    heap.locked = false
+    heap.postponed = {}
     return heap
-end
-
--- function Heap:failsafe()
---     local function get_size(tab)
---         local n = 0
---         for key, value in pairs(tab) do
---             n = n + 1
---         end
---         return n
---     end
---     if #self.heap ~= get_size(self.data) or #self.heap ~= get_size(self.priorities) or #self.heap ~= get_size(self.indices) then
---         local file = fs.open("dump.data", "w")
---         file.write("heap: "..textutils.serialise(self.heap).."\n\n")
---         file.write("data: "..textutils.serialise(self.data).."\n\n")
---         file.write("priorities: "..textutils.serialise(self.priorities).."\n\n")
---         file.write("indices: "..textutils.serialise(self.indices).."\n\n")
---         file.close()
---         error("Invalid heap state!", 3)
---     end
--- end
-
-function Heap:is_empty()
-    return #self.heap == 0
 end
 
 function Heap:__len()
     return #self.heap
+end
+
+--- Returns the priority of the next object.
+---@return number? priority The priority or nil if the heap is empty.
+function Heap:next_priority()
+    if #self.heap > 0 then
+        return
+    end
+    return self.priorities[self.heap[1]]
+end
+
+--- Acquires the heap for iteration. Modification operations will be postponed to a call to "release".
+---@return boolean success If the heap lock was acquired.
+function Heap:acquire()
+    if self.locked then
+        return false
+    end
+    self.locked = true
+    return true
+end
+
+--- Releases the heap after iteration. Calls all the postponed modification method calls.
+function Heap:release()
+    if not self.locked then
+        error("the heap was not locked", 2)
+    end
+    self.locked = false
+    for index, operation in ipairs(self.postponed) do
+        local method_name, arguments = operation.method, operation.arguments
+        self[method_name](self, table.unpack(arguments))
+    end
+    self.postponed = {}
 end
 
 --- Pushes an item with a given priority.
@@ -63,6 +75,12 @@ function Heap:push(item, priority)
     if type(priority) ~= "number" then
         error("expected number for priority, got '"..type(priority).."'", 2)
     end
+
+    if self.locked then
+        table.insert(self.postponed, {method = "push", arguments = {item, priority}})
+        return
+    end
+
     local h = self.hash(item)
     local index 
     if self.indices[h] == nil then
@@ -111,7 +129,6 @@ function Heap:push(item, priority)
             left_child_priority, right_child_priority = self.priorities[left_child_hash] or math.huge, self.priorities[right_child_hash] or math.huge
         end
     end
-    -- self:failsafe()
 end
 
 --- Returns the priority of the given element. Returns nil if not in the heap.
@@ -127,6 +144,12 @@ end
 --- Removes the given item with given priority from the heap.
 ---@param item T
 function Heap:remove(item)
+
+    if self.locked then
+        table.insert(self.postponed, {method = "remove", arguments = {item}})
+        return
+    end
+
     local h = self.hash(item)
     if self.indices[h] == nil then
         error("item not found in heap", 2)
@@ -184,6 +207,12 @@ end
 ---@return T? item
 ---@return number? priority
 function Heap:pop()
+
+    if self.locked then
+        table.insert(self.postponed, {method = "push", arguments = {}})
+        return
+    end
+
     if #self.heap == 0 then return nil end
     
     local root_hash = self.heap[1]
@@ -214,6 +243,38 @@ function Heap:pop()
 
     local root_item, root_priority = self.data[root_hash], self.priorities[root_hash]
     self.data[root_hash], self.priorities[root_hash], self.indices[root_hash] = nil, nil, nil
-    -- self:failsafe()
     return root_item, root_priority
+end
+
+--- Returns an iterator over the elements of the heap. They are NOT yielded in order but the heap does not change.
+---@param max_priority number? A optional maximum priority. Elements with priority > max_priority will not be yielded.
+---@return fun(): T? iterator An iterator function.
+function Heap:iter(max_priority)
+    if max_priority == nil then
+        max_priority = math.huge
+    end
+    if type(max_priority) ~= "number" then
+        error("expected number or nil as argument, got '"..type(max_priority).."'", 2)
+    end
+    local to_do = {1}
+    return function ()
+        if not self.locked then
+            error("heap must be locked before iterating over it", 2)
+        end
+        while true do
+            if #to_do == 0 then
+                return
+            end
+            local index = to_do.pop()
+            local h = self.heap[index]
+            if h ~= nil then
+                local priority = self.priorities[h]
+                if priority <= max_priority then
+                    table.insert(to_do, 2 * index)
+                    table.insert(to_do, 2 * index + 1)
+                    return self.data[h]
+                end
+            end
+        end
+    end
 end
