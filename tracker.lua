@@ -1,5 +1,12 @@
 --- This module allows a turtle to move around, all while updating its relative position, as well as to register callbacks in case of moves.
 
+local maps = require "maps"
+local tracker = {}
+
+
+
+
+
 local position = maps.Position:new(0, 0, 0)
 local direction = maps.EAST
 local POSITION_FILE = ".pos"
@@ -129,8 +136,6 @@ end
 
 
 
-
-_G.tracker = {}
 
 --- Returns the current known position of the turtle
 ---@return Position current The current position

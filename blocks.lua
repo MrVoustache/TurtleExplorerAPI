@@ -1,6 +1,6 @@
 --- A module that helps identifying block types.
 
-_G.blocks = {}
+local blocks = {}
 local LIQUIDS = {
     ["minecraft:water"] = true,
     ["minecraft:lava"] = true
@@ -114,3 +114,9 @@ function blocks.set_temporary(block, is_temporary)
     file.write(textutils.serialiseJSON(TEMPORARY))
     file.close()
 end
+
+
+
+
+
+return blocks

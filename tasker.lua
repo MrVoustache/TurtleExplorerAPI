@@ -1,6 +1,8 @@
 --- This module defines tasks that can be accomplished by turtles in different locations of the world, with different priorities.
 
-_G.tasker = {}
+local maps = require "maps"
+local blocks = require "blocks"
+local tasker = {}
 
 tasker.LIFE_OR_DEATH = -1       --- The task cannot wait, it is a life or death matter. The turtle may go through liquids or unexplored regions.
 tasker.URGENT = 0               --- The task must be performed as quickly as possible. The turtle cannot stop to perform any other task along the journey to the actual matter.
@@ -115,12 +117,18 @@ end
 ---@param m Map
 ---@param p Position
 function tasker.walkable_safe(m, p)
-    return m[p] ~= nil and m[p][0] == maps.EMPTY
+    return m[p] ~= nil and m[p][1] == maps.EMPTY
 end
 
 --- Tells if the turtle can possibly move through the block at the given coordinates according to the map, going through liquids and barriers.
 ---@param m Map
 ---@param p Position
 function tasker.walkable_life_or_death(m, p)
-    return m[p] == nil or m[p][0] == maps.EMPTY or m[p][0] == maps.LIQUID
+    return m[p] == nil or m[p][1] == maps.EMPTY or blocks.is_liquid(m[p][2])
 end
+
+
+
+
+
+return tasker

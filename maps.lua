@@ -2,8 +2,8 @@
 --- 
 --- For direction conventions, the positive x direction is east (direction 0), the positive y direction is up, and the positive z direction is south (direction 1). The negative x direction is west (direction 2), the negative y direction is down, and the negative z direction is north (direction 3).
 
-
-_G.maps = {}
+local heap = require "heap"
+local maps = {}
 
 maps.EAST = 0
 maps.SOUTH = 1
@@ -401,11 +401,10 @@ end
 
 maps.EMPTY = 0
 maps.SOLID = 1
-maps.LIQUID = 2
-maps.BARRIER = 3
+maps.BARRIER = 2
 maps.UNKNOWN_BLOCK_TYPE = "<unknown>"
 ---@class Map A map of a known area in the minecraft world, with information about blocks and properties of the area.
----@field status {Position: number} A table mapping positions to their status, which can be "empty", "solid", "liquid", or "barrier".
+---@field status {Position: number} A table mapping positions to their status, which can be "empty", "solid", or "barrier".
 ---@field blocks {Position: string} A table mapping positions to the type of block at that position, which can be any string representing a block type.
 ---@field size number The size of the map, which is the number of positions with known status or block type.
 ---@field generate_events boolean If events should be generated in case of map update.
@@ -441,7 +440,7 @@ end
 
 --- Sets the information of a position in the map.
 ---@param pos Position The position to set the information of.
----@param status number The status to set, which can be EMPTY, SOLID, LIQUID, or BARRIER.
+---@param status number The status to set, which can be EMPTY, SOLID or BARRIER.
 ---@param block_type string? The type of block at the position, if applicable.
 function Map:set_position(pos, status, block_type)
     if type(pos) ~= "table" or getmetatable(pos) ~= Position then
@@ -456,8 +455,8 @@ function Map:set_position(pos, status, block_type)
     if (status == maps.EMPTY) ~= (block_type == nil) then
         error("block_type must be nil if status is EMPTY, and must be non-nil if status is not EMPTY", 2)
     end
-    if status ~= maps.EMPTY and status ~= maps.SOLID and status ~= maps.LIQUID and status ~= maps.BARRIER then
-        error("status must be either EMPTY(" .. maps.EMPTY .. "), SOLID(" .. maps.SOLID .. "), LIQUID(" .. maps.LIQUID .. "), or BARRIER(" .. maps.BARRIER .. ")", 2)
+    if status ~= maps.EMPTY and status ~= maps.SOLID and status ~= maps.BARRIER then
+        error("status must be either EMPTY(" .. maps.EMPTY .. "), SOLID(" .. maps.SOLID .. "), or BARRIER(" .. maps.BARRIER .. ")", 2)
     end
     local h = pos:hash()
     if self.status[h] == nil then
@@ -540,8 +539,8 @@ function Map:__newindex(pos, info)
         end
         if type(info) == "table" and #info == 2 and type(info[1]) == "number" and type(info[2]) == "string" then
             local status, block = info[1], info[2]
-            if status ~= maps.SOLID and status ~= maps.LIQUID and status ~= maps.BARRIER then
-                error("cannot set position with block info on a status other than SOLID, LIQUID or BARRIER", 2)
+            if status ~= maps.SOLID and status ~= maps.BARRIER then
+                error("cannot set position with block info on a status other than SOLID or BARRIER", 2)
             end
             return self:set_position(pos, status, block)
         end
@@ -831,8 +830,6 @@ function Map:load(reader)
         self.size = self.size + 1
     end
 end
-
-
 
 
 

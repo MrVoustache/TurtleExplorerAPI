@@ -1,4 +1,6 @@
-_G.heap = {}
+--- A simple yet very practical priority queue implementation using binary heaps.
+
+local heap = {}
 
 ---@generic T
 ---@class Heap<T> A binary heap class.
@@ -20,16 +22,16 @@ function Heap:new(hash)
     if type(hash) ~= "function" then
         error("expected function for hash, got '"..type(hash).."'", 2)
     end
-    local heap = {}
-    setmetatable(heap, self or Heap)
-    heap.hash = hash
-    heap.data = {}
-    heap.heap = {}
-    heap.priorities = {}
-    heap.indices = {}
-    heap.locked = false
-    heap.postponed = {}
-    return heap
+    self = rawequal(self, Heap) and {} or self
+    setmetatable(self, self or Heap)
+    self.hash = hash
+    self.data = {}
+    self.heap = {}
+    self.priorities = {}
+    self.indices = {}
+    self.locked = false
+    self.postponed = {}
+    return self
 end
 
 function Heap:__len()
@@ -278,3 +280,9 @@ function Heap:iter(max_priority)
         end
     end
 end
+
+
+
+
+
+return heap
