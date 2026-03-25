@@ -451,8 +451,11 @@ function Map:set_position(pos, status, block_type)
     if block_type ~= nil and type(block_type) ~= "string" then
         error("block_type must be a string, not '" .. type(block_type) .. "'", 2)
     end
-    if (status == maps.EMPTY) ~= (block_type == nil) then
-        error("block_type must be nil if status is EMPTY, and must be non-nil if status is not EMPTY", 2)
+    if status == maps.SOLID and block_type == nil then
+        error("block_type cannot be nil if status is SOLID", 2)
+    end
+    if status == maps.EMPTY and block_type ~= nil then
+        error("block type must be nil when status is EMPTY", 2)
     end
     if status ~= maps.EMPTY and status ~= maps.SOLID and status ~= maps.BARRIER then
         error("status must be either EMPTY(" .. maps.EMPTY .. "), SOLID(" .. maps.SOLID .. "), or BARRIER(" .. maps.BARRIER .. ")", 2)
