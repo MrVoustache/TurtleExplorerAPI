@@ -310,6 +310,23 @@ end
 
 Position.distance_to = Position.euclidian_distance_to
 
+--- Returns whether this position is inside the box bounded by two opposite corners.
+---@param pos1 Position The first corner of the bounding box.
+---@param pos2 Position The second corner of the bounding box.
+---@return boolean inside Whether this position is inside the box.
+function Position:inside_box(pos1, pos2)
+    if type(pos1) ~= "table" or getmetatable(pos1) ~= Position then
+        error("expected position as argument #1, got '"..type(pos1).."'", 2)
+    end
+    if type(pos2) ~= "table" or getmetatable(pos2) ~= Position then
+        error("expected position as argument #2, got '"..type(pos2).."'", 2)
+    end
+    local minX, maxX = math.min(pos1.x, pos2.x), math.max(pos1.x, pos2.x)
+    local minY, maxY = math.min(pos1.y, pos2.y), math.max(pos1.y, pos2.y)
+    local minZ, maxZ = math.min(pos1.z, pos2.z), math.max(pos1.z, pos2.z)
+    return self.x >= minX and self.x <= maxX and self.y >= minY and self.y <= maxY and self.z >= minZ and self.z <= maxZ
+end
+
 --- Returns an iterator of Positions that are in the cubic area bounded by the two given positions.
 ---@param pos1 Position The first bounding position (the first to be yielded).
 ---@param pos2 Position The second bounding position (the last to be yielded).
@@ -347,6 +364,29 @@ function maps.bounded_positions(pos1, pos2)
         end
     end
     return coroutine.wrap(function() return iterator(pos1.x, pos2.x, dx, pos1.y, pos2.y, dy, pos1.z, pos2.z, dz) end)
+end
+
+--- Returns an iterator of all the blocks at a Manhattan distance of at most range blocks.
+---@param range number The maximum distance to the yielded blocks.
+---@return fun(): Position? iterator The iterator function.
+function Position:at_range(range)
+    if type(range) ~= "number" then
+        error("expected number, got '"..type(range).."'", 2)
+    end
+    if range < 0 then
+        error("expected positive or null integer, got "..range, 2)
+    end
+    range = math.floor(range)
+    local function iterator()
+        for x = self.x - range, self.x + range do
+            for y = self.y - range, self.y + range do
+                for z = self.z - range, self.z + range do
+                    coroutine.yield(Position:new(x, y, z))
+                end
+            end
+        end
+    end
+    return coroutine.wrap(function() return iterator() end)
 end
 
 --- Returns a short string representation of a position for hashing.
@@ -508,6 +548,24 @@ function Map:__newindex(pos, info)
         error("invalid parameters for setting position: "..tostring(info), 2)
     end
     return rawset(maps.Map, pos, info)
+end
+
+
+---@alias next_return {[1]: number, [2]: string}
+--- Returns a position-information iterator over the map.
+---@return fun(map: Map, pos: Position?): Position?, next_return? next The next function.
+---@return Map self The map itself.
+---@return nil first_index The first nil index.
+function Map:__pairs()
+    ---@param map Map
+    ---@param pos Position?
+    local function map_next(map, pos)
+        local next_pos, status = next(map.status, pos)
+        if next_pos then
+            return next_pos, {status, map.blocks[pos]}
+        end
+    end
+    return map_next, self, nil
 end
 
 --- Default function to check that a turtle can go through a given position in the given map.
