@@ -4,16 +4,20 @@ _G.scheduler = {}
 
 local MAP_FILE = ".map"
 
-local LIQUIDS = {
-    ["minecraft:water"] = true,
-    ["minecraft:lava"] = true
-}
-local TEMPORARY = {
-    ["minecraft:fire"] = true,
-    ["computercraft:turtle_normal"] = true,
-    ["computercraft:turtle_advanced"] = true
-}
 FORGET_DELAY = 5.0
+
+local active_tasks = heap.Heap:new(function (task) return tostring(task.identifier) end)        ---@type Heap<Task> The tasks to run.
+local idle_tasks = {}                                                                           ---@type {integer: Task} The sleeping tasks.
+local task_threads = {}                                                                         ---@type {integer: thread} The background threads of all the tasks.
+local map_updated = false
+local current_priority = math.mininteger or -math.huge
+local current_task = nil            ---@type Task?
+
+local blocks_to_forget = {}     ---@type {number: Position} Timer indentifiers corresponding to blocks to forget.
+
+local moving_locked = false
+local turting_locked = false
+local lock_position = nil           ---@type Position?
 
 
 
@@ -45,14 +49,48 @@ local function log(level, message)
     end
 end
 
+--- Signals tasks that the map has changed at a specific position.
+---@param pos Position The position of the update
+local function signal_map_update(pos)
+    for identifier, task in pairs(idle_tasks) do
+        local ok, err = pcall(task.on_map_update, task, pos)
+        if not ok then
+            log("error", "task failed to execute its map update code: "..tostring(task))
+        end
+    end
+    if active_tasks:acquire() then
+        for task in active_tasks:iter() do
+            local ok, err = pcall(task.on_map_update, task, pos)
+            if not ok then
+                log("error", "task failed to execute its map update code: "..tostring(task))
+            end
+        end
+        active_tasks:release()
+    end
+end
+
+local function signal_move()
+    local pos, dir = tracker.get_position(), tracker.get_direction()
+    for identifier, task in pairs(idle_tasks) do
+        local ok, err = pcall(task.on_move, task, pos, dir)
+        if not ok then
+            log("error", "task failed to execute its move code: "..tostring(task))
+        end
+    end
+    if active_tasks:acquire() then
+        for task in active_tasks:iter() do
+            local ok, err = pcall(task.on_move, task, pos, dir)
+            if not ok then
+                log("error", "task failed to execute its move code: "..tostring(task))
+            end
+        end
+        active_tasks:release()
+    end
+end
 
 
 
 
-
-local moving_locked = false
-local turting_locked = false
-local lock_position = nil           ---@type Position? 
 
 local old_forward = turtle.forward
 function turtle.forward()
@@ -63,6 +101,9 @@ function turtle.forward()
         return false, "this would get the turtle too far from its path"
     end
     local ok, err = old_forward()
+    if ok then
+        signal_move()
+    end
     return ok, err
 end
 
@@ -74,8 +115,10 @@ function turtle.back()
     if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():in_direction(-tracker.get_direction() % 4)) > 2 then
         return false, "this would get the turtle too far from its path"
     end
-
     local ok, err = old_back()
+    if ok then
+        signal_move()
+    end
     return ok, err
 end
 
@@ -88,6 +131,9 @@ function turtle.up()
         return false, "this would get the turtle too far from its path"
     end
     local ok, err = old_up()
+    if ok then
+        signal_move()
+    end
     return ok, err
 end
 
@@ -100,6 +146,9 @@ function turtle.down()
         return false, "this would get the turtle too far from its path"
     end
     local ok, err = old_down()
+    if ok then
+        signal_move()
+    end
     return ok, err
 end
 
@@ -108,7 +157,11 @@ function turtle.turnLeft()
     if turting_locked then
         return false, "turning is locked for now"
     end
-    return old_turn_left()
+    local ok, err = old_turn_left()
+    if ok then
+        signal_move()
+    end
+    return ok, err
 end
 
 local old_turn_right = turtle.turnRight
@@ -116,20 +169,17 @@ function turtle.turnRight()
     if turting_locked then
         return false, "turning is locked for now"
     end
-    return old_turn_right()
+    local ok, err = old_turn_right()
+    if ok then
+        signal_move()
+    end
+    return ok, err
 end
 
 
 
 
 
-local active_tasks = heap.Heap:new(function (task) return tostring(task.identifier) end)        ---@type Heap<Task> The tasks to run.
-local idle_tasks = {}                                                                           ---@type {integer: Task} The sleeping tasks.
-local task_threads = {}                                                                         ---@type {integer: thread} The background threads of all the tasks.
-local map_updated = false
-local current_priority = math.mininteger or -math.huge
-
-local blocks_to_forget = {}     ---@type {number: Position} Timer indentifiers corresponding to blocks to forget.
 --- Marks a position as empty after a certain amount of time.
 ---@param pos Position The position to mark empty.
 local function forget_block(pos)
@@ -137,7 +187,7 @@ local function forget_block(pos)
 end
 
 local function on_map_update(position, old_status, old_block, new_status, new_block)
-    if type(new_block) == "string" and TEMPORARY[new_block] then
+    if type(new_block) == "string" and blocks.is_temporary(new_block) then
         log("debug", "Map temporarily updated.")
         forget_block(position)
     else
@@ -160,6 +210,12 @@ if fs.exists(MAP_FILE) then
     file.close()
     if not ok then
         log("warning", "Could load map file: "..err)
+    else
+        for pos, data in pairs(map) do
+            if data[2] ~= nil and blocks.is_temporary(data[2]) then
+                forget_block(pos)
+            end
+        end
     end
     if map == nil then
         error("could not load map for an unknown reason", 2)
@@ -170,6 +226,91 @@ local function save_map()
     local file = fs.open(MAP_FILE, "w")
     map:save(file.write)
     file.close()
+end
+
+
+
+
+
+--- Adds a single block to become forbidden for the turtle.
+---@param pos Position The block to forbid access to.
+---@return boolean new If the block was added to the barrier or false if it was already one.
+function scheduler.add_barrier_block(pos)
+    if type(pos) ~= "table" or getmetatable(pos) ~= maps.Position then
+        error("expected Position for argument, got '"..type(pos).."'", 2)
+    end
+    if map[pos] == nil or maps[pos][2] == nil then
+        map[pos] = {maps.BARRIER, maps.UNKNOWN_BLOCK_TYPE}
+        map_updated = true
+        return true
+    elseif maps[pos][1] ~= maps.BARRIER then
+        maps[pos] = {maps.BARRIER, maps[pos][2]}
+        map_updated = true
+        return true
+    else
+        return false
+    end
+end
+
+--- Adds a wall of forbidden blocks for the turtle given two opposite corner blocks.
+---@param pos1 Position The first corner.
+---@param pos2 Position The opposite corner.
+---@return integer added_blocks The number of new barrier blocks.
+function scheduler.add_barrier_wall(pos1, pos2)
+    if type(pos1) ~= "table" or getmetatable(pos1) ~= maps.Position then
+        error("expected Position for argument #1, got '"..type(pos1).."'", 2)
+    end
+    if type(pos2) ~= "table" or getmetatable(pos2) ~= maps.Position then
+        error("expected Position for argument #2, got '"..type(pos2).."'", 2)
+    end
+    if pos1.x ~= pos2.x and pos1.y ~= pos2.y and pos1.z ~= pos2.z then
+        error("at least one coordinate should be equal between the two blocks, the three are different", 2)
+    end
+    local total_added = 0
+    if pos1.x == pos2.x then
+        local x, y1, y2, z1, z2 = pos1.x, math.min(pos1.y, pos2.y), math.max(pos1.y, pos2.y), math.min(pos1.z, pos2.z), math.max(pos1.z, pos2.z)
+        for y = y1, y2 do
+            for z = z1, z2 do
+                total_added = total_added + scheduler.add_barrier_block(maps.Position:new(x, y, z))
+            end
+        end
+    elseif pos1.y == pos2.y then
+        local y, x1, x2, z1, z2 = pos1.y, math.min(pos1.x, pos2.x), math.max(pos1.x, pos2.x), math.min(pos1.z, pos2.z), math.max(pos1.z, pos2.z)
+        for x = x1, x2 do
+            for z = z1, z2 do
+                total_added = total_added + scheduler.add_barrier_block(maps.Position:new(x, y, z))
+            end
+        end
+    elseif pos1.z == pos2.z then
+        local z, x1, x2, y1, y2 = pos1.z, math.min(pos1.x, pos2.x), math.max(pos1.x, pos2.x), math.min(pos1.y, pos2.y), math.max(pos1.y, pos2.y)
+        for x = x1, x2 do
+            for y = y1, y2 do
+                total_added = total_added + scheduler.add_barrier_block(maps.Position:new(x, y, z))
+            end
+        end
+    end
+    return total_added
+end
+
+--- Adds a box of forbidden blocks for the turtle given two opposite corner blocks.
+---@param pos1 Position The first corner.
+---@param pos2 Position The opposite corner.
+---@return integer added_blocks The number of new barrier blocks.
+function scheduler.add_barrier_box(pos1, pos2)
+    if type(pos1) ~= "table" or getmetatable(pos1) ~= maps.Position then
+        error("expected Position for argument #1, got '"..type(pos1).."'", 2)
+    end
+    if type(pos2) ~= "table" or getmetatable(pos2) ~= maps.Position then
+        error("expected Position for argument #2, got '"..type(pos2).."'", 2)
+    end
+    local total_added = 0
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos1.y, pos1.z), maps.Position:new(pos1.x, pos2.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos1.y, pos1.z), maps.Position:new(pos2.x, pos1.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos1.y, pos1.z), maps.Position:new(pos2.x, pos2.y, pos1.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos2.x, pos1.y, pos1.z), maps.Position:new(pos2.x, pos2.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos2.y, pos1.z), maps.Position:new(pos2.x, pos2.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos1.y, pos2.z), maps.Position:new(pos2.x, pos2.y, pos2.z))
+    return total_added
 end
 
 
@@ -188,6 +329,9 @@ local function run_background_threads()
 end
 
 
+
+
+
 --- Updates the knowledge of the map at the given position.
 ---@param pos Position
 ---@param data {["name"]: string}?
@@ -195,7 +339,7 @@ local function update_map_knowledge(pos, data)
     local old_status, old_block = table.unpack(map[pos])
     local new_status, new_block = nil, nil
     if data ~= nil then
-        if LIQUIDS[data["name"]] then
+        if blocks.is_liquid(data) then
             new_status, new_block = maps.LIQUID, data["name"]
         else
             new_status, new_block = maps.SOLID, data["name"]
@@ -205,6 +349,7 @@ local function update_map_knowledge(pos, data)
     end
     if new_status ~= old_status or new_block ~= old_block then
         map[pos] = {new_status, new_block}
+        signal_map_update(pos)
     end
 end
 
@@ -213,7 +358,7 @@ local function forget_blocks()
         local event = {coroutine.yield()}
         if event[1] == "timer" and blocks_to_forget[event[2]] then
             local pos = table.remove(blocks_to_forget, event[2])
-            update_map_knowledge(pos, maps.EMPTY)
+            update_map_knowledge(pos, {})
         end
     end
 end
@@ -237,27 +382,13 @@ local function ensure_direction(direction)
     end
 end
 
---- Tells if the turtle can move safely through the block at the given coordinates according to the map.
----@param m Map
----@param p Position
-local function walkable_safe(m, p)
-    return m[p] ~= nil and m[p][0] == maps.EMPTY
-end
-
---- Tells if the turtle can possibly move through the block at the given coordinates according to the map.
----@param m Map
----@param p Position
-local function walkable_life_or_death(m, p)
-    return m[p] == nil or m[p][0] == maps.EMPTY or m[p][0] == maps.LIQUID
-end
-
 --- Moves to the given location without stopping to handle any task along the way, going through liquids and unknown areas.
 ---@param destination Position The position to reach to accomplish to task.
 ---@param direction number? The eventual direction in which to arrive at the direction.
 ---@return boolean success If the turtle succesfully reached the destination.
 local function move_to_LIFE_OR_DEATH(destination, direction)
     while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
-        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, walkable_life_or_death)
+        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_life_or_death)
         if path == nil then
             return false
         end
@@ -286,6 +417,14 @@ local function move_to_LIFE_OR_DEATH(destination, direction)
                 end
             end
             if not ok1 then
+                if current_task ~= nil then
+                    local ok3, cancel_task = pcall(current_task.on_path_obstructed, current_task, destination, direction, tracker.get_position(), tracker.get_direction())
+                    if not ok3 then
+                        log("error", "task failed to acknowledge obstructed path: "..tostring(current_task))
+                    elseif cancel_task then
+                        return false
+                    end
+                end
                 break
             end
         end
@@ -302,7 +441,7 @@ end
 ---@return boolean success If the turtle succesfully reached the destination.
 local function move_to_URGENT(destination, direction)
     while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
-        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, walkable_safe)
+        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_safe)
         if path == nil then
             return false
         end
@@ -331,6 +470,14 @@ local function move_to_URGENT(destination, direction)
                 end
             end
             if not ok1 then
+                if current_task ~= nil then
+                    local ok3, cancel_task = pcall(current_task.on_path_obstructed, current_task, destination, direction, tracker.get_position(), tracker.get_direction())
+                    if not ok3 then
+                        log("error", "task failed to acknowledge obstructed path: "..tostring(current_task))
+                    elseif cancel_task then
+                        return false
+                    end
+                end
                 break
             end
         end
@@ -370,7 +517,7 @@ local function move_to_QUICK(destination, direction)
     end
 
     while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
-        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, walkable_safe)
+        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_safe)
         if path == nil then
             return false
         end
@@ -405,6 +552,14 @@ local function move_to_QUICK(destination, direction)
                 end
             end
             if not ok1 then
+                if current_task ~= nil then
+                    local ok3, cancel_task = pcall(current_task.on_path_obstructed, current_task, destination, direction, tracker.get_position(), tracker.get_direction())
+                    if not ok3 then
+                        log("error", "task failed to acknowledge obstructed path: "..tostring(current_task))
+                    elseif cancel_task then
+                        return false
+                    end
+                end
                 break
             else
                 if active_tasks:acquire() then
@@ -449,7 +604,7 @@ local function move_to_AROUND(destination, direction)
     end
 
     while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
-        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, walkable_safe)
+        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_safe)
         if path == nil then
             return false
         end
@@ -484,6 +639,14 @@ local function move_to_AROUND(destination, direction)
                 end
             end
             if not ok1 then
+                if current_task ~= nil then
+                    local ok3, cancel_task = pcall(current_task.on_path_obstructed, current_task, destination, direction, tracker.get_position(), tracker.get_direction())
+                    if not ok3 then
+                        log("error", "task failed to acknowledge obstructed path: "..tostring(current_task))
+                    elseif cancel_task then
+                        return false
+                    end
+                end
                 break
             else
                 if active_tasks:acquire() then
@@ -529,7 +692,7 @@ local function move_to_NEAR(destination, direction)
     end
 
     while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
-        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, walkable_safe)
+        local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_safe)
         if path == nil then
             return false
         end
@@ -565,6 +728,14 @@ local function move_to_NEAR(destination, direction)
                 end
             end
             if not ok1 then
+                if current_task ~= nil then
+                    local ok3, cancel_task = pcall(current_task.on_path_obstructed, current_task, destination, direction, tracker.get_position(), tracker.get_direction())
+                    if not ok3 then
+                        log("error", "task failed to acknowledge obstructed path: "..tostring(current_task))
+                    elseif cancel_task then
+                        return false
+                    end
+                end
                 break
             else
                 if active_tasks:acquire() then
@@ -661,7 +832,7 @@ local function do_tasks()
                 for index, pos in ipairs(positions) do
                     if seen[pos:hash()..tostring(task.timing_cost)] == nil then
                         local dir = directions ~= nil and directions[index] or nil
-                        local path = map:find_path(current_pos, current_dir, pos, dir, task.timing_cost == tasker.LIFE_OR_DEATH and walkable_life_or_death or walkable_safe, task.path_costs)
+                        local path = map:find_path(current_pos, current_dir, pos, dir, task.timing_cost == tasker.LIFE_OR_DEATH and tasker.walkable_life_or_death or tasker.walkable_safe, task.path_costs)
                         if path ~= nil and #path < best_distance then
                             best_distance = #path
                             best_direction = dir
@@ -680,6 +851,7 @@ local function do_tasks()
             end
             if best_task ~= nil and best_position ~= nil then
                 local arrived = false
+                current_task = best_task
                 if best_task.timing_cost == tasker.NEAR then
                     arrived = move_to_NEAR(best_position, best_direction)
                 elseif best_task.timing_cost == tasker.AROUND then
