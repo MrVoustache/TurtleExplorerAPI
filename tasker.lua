@@ -22,12 +22,13 @@ tasker.NEAR = 3                 --- The task can wait and the turtle may move at
 ---@field path_costs {turning: number, up: number, down: number, forward: number}? A table indicating the costs for building a path to a target destination od the task.
 local Task = {}
 Task.__name = "Task"
+Task.__index = Task
+setmetatable(Task, Task)
 tasker.Task = Task
 local identifier = 0
 
 --- Creates a new task
 function Task:new()
-    Task.__index = Task
     local task = {}
     setmetatable(task, self or Task)
     task.check_on_move = false
@@ -43,7 +44,7 @@ end
 ---@param pos Position The current turtle position.
 ---@param direction number The current turtle direction.
 ---@param freedom integer? One of the three secondary objective limitation constants (tasker.QUICK, tasker.AROUND, tasker.NEAR) if the task was is being run as a secondary objective, or nil if the turtle went to the current position specifically for this task.
----@return boolean success If the entire task succeeded.
+---@return boolean success If the entire task succeeded and is finished.
 function Task:perform(pos, direction, freedom)
     error("subclasses of task must override this method", 2)
 end
@@ -89,4 +90,37 @@ end
 --- Called by the scheduler when the map knowledge changes on a given position. This function is only called when a map is or gets linked to the task.
 ---@param position Position? The position on which the map has changed. Is nil when the map is affected to the task.
 function Task:on_map_update(position)
+end
+
+--- Called by the scheduler when the position or direction of the turtle changes.
+---@param new_position Position The new position the turtle is at.
+---@param new_direction Position The new direction the turtle is facing.
+function Task:on_move(new_position, new_direction)
+end
+
+--- Called by the scheduler when the turtle was trying to move to a given target position and direction to accomplish this task, when the path was obstructed.
+---@param target_pos Position The position that the task asked to reach.
+---@param target_dir number? The corresponding direction the task asked to reach.
+---@param current_pos Position The current position where the turtle got stuck.
+---@param current_dir number The current direction.
+---@return boolean? cancel If this function returns true, the ongoing scheduler will interrupt the process of reaching this position and will choose again a task to run.
+function Task:on_path_obstructed(target_pos, target_dir, current_pos, current_dir)
+end
+
+
+
+
+
+--- Tells if the turtle can move safely through the block at the given coordinates according to the map, only going through known empty positions.
+---@param m Map
+---@param p Position
+function tasker.walkable_safe(m, p)
+    return m[p] ~= nil and m[p][0] == maps.EMPTY
+end
+
+--- Tells if the turtle can possibly move through the block at the given coordinates according to the map, going through liquids and barriers.
+---@param m Map
+---@param p Position
+function tasker.walkable_life_or_death(m, p)
+    return m[p] == nil or m[p][0] == maps.EMPTY or m[p][0] == maps.LIQUID
 end
