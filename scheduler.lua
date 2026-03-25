@@ -344,11 +344,8 @@ local function update_map_knowledge(pos, data)
     local old_status, old_block = table.unpack(map[pos])
     local new_status, new_block = nil, nil
     if data ~= nil then
-        if blocks.is_liquid(data) then
-            new_status, new_block = maps.LIQUID, data["name"]
-        else
-            new_status, new_block = maps.SOLID, data["name"]
-        end
+
+        new_status, new_block = maps.SOLID, data["name"]
     else
         new_status, new_block = maps.EMPTY, nil
     end
