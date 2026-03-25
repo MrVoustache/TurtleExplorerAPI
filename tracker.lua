@@ -3,6 +3,7 @@
 local position = maps.Position:new(0, 0, 0)
 local direction = maps.EAST
 local POSITION_FILE = ".pos"
+local position_changed = false
 
 local function load_position()
     local file = fs.open(POSITION_FILE, "r")
@@ -17,11 +18,12 @@ local function load_position()
     file.close()
 end
 
-if fs.exists(".pos") then
+if fs.exists(POSITION_FILE) then
     local ok, err = pcall(load_position)
     if not ok then
         printError("Failed to load position file: "..err)
     end
+    fs.delete(POSITION_FILE)
 end
 
 local function save_position()
@@ -46,7 +48,7 @@ function turtle.turnLeft()
         if direction < 0 then
             direction = 3
         end
-        save_position()
+        position_changed = true
     end
     return ok
 end
@@ -59,7 +61,7 @@ function turtle.turnRight()
         if direction > 3 then
             direction = 0
         end
-        save_position()
+        position_changed = true
     end
     return ok
 end
@@ -69,7 +71,7 @@ function turtle.forward()
     local ok, err = old_forward()
     if ok then
         position = position:in_direction(direction)
-        save_position()
+        position_changed = true
     end
     return ok, err
 end
@@ -79,7 +81,7 @@ function turtle.up()
     local ok, err = old_up()
     if ok then
         position = position:above()
-        save_position()
+        position_changed = true
     end
     return ok, err
 end
@@ -89,7 +91,7 @@ function turtle.down()
     local ok, err = old_down()
     if ok then
         position = position:below()
-        save_position()
+        position_changed = true
     end
     return ok, err
 end
@@ -99,9 +101,29 @@ function turtle.back()
     local ok, err = old_back()
     if ok then
         position = position:in_direction(-direction % 4)
-        save_position()
+        position_changed = true
     end
     return ok, err
+end
+
+
+
+
+
+local old_reboot = os.reboot
+function os.reboot()
+    if position_changed then
+        save_position()
+    end
+    old_reboot()
+end
+
+local old_shutdown = os.shutdown
+function os.shutdown()
+    if position_changed then
+        save_position()
+    end
+    old_shutdown()
 end
 
 
