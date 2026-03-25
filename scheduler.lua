@@ -244,12 +244,8 @@ function scheduler.add_barrier_block(pos)
     if type(pos) ~= "table" or getmetatable(pos) ~= maps.Position then
         error("expected Position for argument, got '"..type(pos).."'", 2)
     end
-    if map[pos] == nil or maps[pos][2] == nil then
-        map[pos] = {maps.BARRIER, maps.UNKNOWN_BLOCK_TYPE}
-        map_updated = true
-        return true
-    elseif maps[pos][1] ~= maps.BARRIER then
-        maps[pos] = {maps.BARRIER, maps[pos][2]}
+    if map[pos] == nil or maps[pos][1] ~= maps.BARRIER then
+        map[pos] = {maps.BARRIER, map[pos] ~= nil and map[pos][2] or nil}
         map_updated = true
         return true
     else

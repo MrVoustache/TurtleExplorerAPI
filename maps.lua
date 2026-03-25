@@ -402,7 +402,6 @@ end
 maps.EMPTY = 0
 maps.SOLID = 1
 maps.BARRIER = 2
-maps.UNKNOWN_BLOCK_TYPE = "<unknown>"
 ---@class Map A map of a known area in the minecraft world, with information about blocks and properties of the area.
 ---@field status {Position: number} A table mapping positions to their status, which can be "empty", "solid", or "barrier".
 ---@field blocks {Position: string} A table mapping positions to the type of block at that position, which can be any string representing a block type.
