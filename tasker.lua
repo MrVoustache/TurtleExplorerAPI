@@ -58,10 +58,10 @@ end
 function Task:background_handler(map)
 end
 
---- Returns an array of positions in which the task should lead the turtle to. If the turtle
+--- Returns an array of positions in which the task should lead the turtle to.
 ---@param current_position Position The current position of the turtle at the time of the request.
 ---@param current_direction DIRECTION The current orientation of the turtle at the time of the request.
----@return Position[] positions Most of the positions (you can limit it to the closest for example).
+---@return Position[] positions The positions that the turtle needs to go to to complete the task. It need to be a new table as it may get modified by the scheduler.
 ---@return DIRECTION[]? directions If necessary, the directions in which the turtle should look at when reaching any of the corresponding positions. It can be a table with number indexes only on the position indexes that require a specific orientation.
 function Task:positions(current_position, current_direction)
     error("subclasses of task must override this method", 2)

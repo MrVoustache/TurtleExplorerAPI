@@ -768,6 +768,7 @@ local function answer_requests()
                 active_tasks:remove(task)
             end
             idle_tasks[task.identifier] = task
+            task.enabled = false
         elseif event[1] == "task_enabled" then
             task = event[2]
             if idle_tasks[task.identifier] ~= nil then
@@ -775,6 +776,7 @@ local function answer_requests()
                 idle_tasks[task.identifier] = nil
             end
             active_tasks:push(task, task.priority)
+            task.enabled = true
         elseif event[1] == "task_priority" then
             task = event[2]
             task.priority = event[3]
@@ -812,41 +814,78 @@ end
 local function do_tasks()
     while true do
         local first_task = active_tasks:pop()
+
         if first_task then
-            local tasks = {[first_task.identifier] = first_task}      ---@type {integer: Task}
-            current_priority = tasks[1].priority
+            local current_pos, current_dir = tracker.get_position(), tracker.get_direction()
+            local first_positions, first_directions = first_task:positions(current_pos, current_dir)
+            local task_positions = {[first_task] = first_positions}     ---@type {[Task]: Position[]}
+            local task_directions = first_directions ~= nil and {[first_task] = first_directions} or {}     ---@type {[Task]: DIRECTION[]}
+            local all_tasks = {}        ---@type {[integer]: Task}
+            current_priority = first_task.priority
+
             while active_tasks:next_priority() == current_priority do
                 local next_task = active_tasks:pop()
-                tasks[next_task.identifier] = next_task
+                local next_positions, next_directions = next_task:positions(current_pos, current_dir)
+                all_tasks[next_task.identifier] = next_task
+                task_positions[next_task] = next_positions
+                if next_directions ~= nil then
+                    task_directions[next_task] = task_directions
+                end
             end
+
             local seen = {}
             local best_task = nil
             local best_position = nil
             local best_direction = nil
             local best_distance = math.huge
-            local current_pos, current_dir = tracker.get_position(), tracker.get_direction()
-            for identifier, task in pairs(tasks) do
-                local positions, directions = task:positions(current_pos, current_dir)
-                for index, pos in ipairs(positions) do
-                    if seen[pos:hash()..tostring(task.timing_cost)] == nil then
-                        local dir = directions ~= nil and directions[index] or nil
-                        local path = map:find_path(current_pos, current_dir, pos, dir, task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH and tasker.walkable_life_or_death or tasker.walkable_safe, task.path_costs)
-                        if path ~= nil and #path < best_distance then
-                            best_distance = #path
-                            best_direction = dir
-                            best_position = pos
-                            best_task = task
+
+            while next(task_positions) ~= nil do
+
+                for task, positions in pairs(task_positions) do
+                    local directions = task_directions[task]
+                    local closest_position = nil
+                    local closest_index = nil
+                    local distance = math.huge
+
+                    for index, pos in pairs(positions) do
+                        if current_pos:manhattan_distance_to(pos) < distance then
+                            distance = current_pos:manhattan_distance_to(pos)
+                            closest_position = pos
+                            closest_index = index
                         end
-                        seen[pos:hash()..tostring(task.timing_cost)] = true
+                    end
+
+                    if distance >= best_distance then
+                        task_positions[task] = nil
+                        task_directions[task] = nil
+                    else
+                        if closest_index == nil or closest_position == nil then
+                            error("should not have ended up there", 1)
+                        end
+                        local closest_direction = directions ~= nil and directions[closest_index] or nil
+                        positions[closest_index] = nil
+
+                        if seen[closest_position:hash()..closest_direction..tostring(task.timing_cost)] == nil then
+                            local path = map:find_path(current_pos, current_dir, closest_position, closest_direction, task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH and tasker.walkable_life_or_death or tasker.walkable_safe, task.path_costs)
+                            if path ~= nil and #path - 1 < best_distance then
+                                best_distance = #path - 1
+                                best_direction = closest_direction
+                                best_position = closest_position
+                                best_task = task
+                            end
+                            seen[closest_position:hash()..closest_direction..tostring(task.timing_cost)] = true
+                        end
                     end
                 end
             end
+
             if best_task ~= nil then
-                tasks[best_task.identifier] = nil
+                all_tasks[best_task.identifier] = nil
             end
-            for identifier, task in pairs(tasks) do
+            for identifier, task in pairs(all_tasks) do
                 active_tasks:push(task, task.priority)
             end
+
             if best_task ~= nil and best_position ~= nil then
                 local arrived = false
                 current_task = best_task
