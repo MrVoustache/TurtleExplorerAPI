@@ -244,8 +244,8 @@ function scheduler.add_barrier_block(pos)
     if type(pos) ~= "table" or getmetatable(pos) ~= maps.Position then
         error("expected Position for argument, got '"..type(pos).."'", 2)
     end
-    if map[pos] == nil or maps[pos][1] ~= maps.BARRIER then
-        map[pos] = {maps.BARRIER, map[pos] ~= nil and map[pos][2] or nil}
+    if map[pos] == nil or maps[pos][1] ~= maps.STATUS.BARRIER then
+        map[pos] = {maps.STATUS.BARRIER, map[pos] ~= nil and map[pos][2] or nil}
         map_updated = true
         return true
     else
@@ -341,9 +341,9 @@ local function update_map_knowledge(pos, data)
     local new_status, new_block = nil, nil
     if data ~= nil then
 
-        new_status, new_block = maps.SOLID, data["name"]
+        new_status, new_block = maps.STATUS.SOLID, data["name"]
     else
-        new_status, new_block = maps.EMPTY, nil
+        new_status, new_block = maps.STATUS.EMPTY, nil
     end
     if new_status ~= old_status or new_block ~= old_block then
         map[pos] = {new_status, new_block}
@@ -500,7 +500,7 @@ local function move_to_QUICK(destination, direction)
         end
         moving_locked = true
         turting_locked = true
-        local ok, err_or_task_finished = pcall(task.perform, task, tracker.get_position(), tracker.get_direction(), tasker.QUICK)
+        local ok, err_or_task_finished = pcall(task.perform, task, tracker.get_position(), tracker.get_direction(), tasker.TIMING_COST.QUICK)
         moving_locked = false
         turting_locked = false
         if not ok then
@@ -588,7 +588,7 @@ local function move_to_AROUND(destination, direction)
             return
         end
         moving_locked = true
-        local ok, err_or_task_finished = pcall(task.perform, task, tracker.get_position(), tracker.get_direction(), tasker.AROUND)
+        local ok, err_or_task_finished = pcall(task.perform, task, tracker.get_position(), tracker.get_direction(), tasker.TIMING_COST.AROUND)
         moving_locked = false
         if not ok then
             log("error", "sub-task failed: "..err_or_task_finished)
@@ -676,7 +676,7 @@ local function move_to_NEAR(destination, direction)
             return
         end
         lock_position = last_position
-        local ok, err_or_task_finished = pcall(task.perform, task, tracker.get_position(), tracker.get_direction(), tasker.NEAR)
+        local ok, err_or_task_finished = pcall(task.perform, task, tracker.get_position(), tracker.get_direction(), tasker.TIMING_COST.NEAR)
         lock_position = nil
         if not ok then
             log("error", "sub-task failed: "..err_or_task_finished)
@@ -830,7 +830,7 @@ local function do_tasks()
                 for index, pos in ipairs(positions) do
                     if seen[pos:hash()..tostring(task.timing_cost)] == nil then
                         local dir = directions ~= nil and directions[index] or nil
-                        local path = map:find_path(current_pos, current_dir, pos, dir, task.timing_cost == tasker.LIFE_OR_DEATH and tasker.walkable_life_or_death or tasker.walkable_safe, task.path_costs)
+                        local path = map:find_path(current_pos, current_dir, pos, dir, task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH and tasker.walkable_life_or_death or tasker.walkable_safe, task.path_costs)
                         if path ~= nil and #path < best_distance then
                             best_distance = #path
                             best_direction = dir
@@ -850,15 +850,15 @@ local function do_tasks()
             if best_task ~= nil and best_position ~= nil then
                 local arrived = false
                 current_task = best_task
-                if best_task.timing_cost == tasker.NEAR then
+                if best_task.timing_cost == tasker.TIMING_COST.NEAR then
                     arrived = move_to_NEAR(best_position, best_direction)
-                elseif best_task.timing_cost == tasker.AROUND then
+                elseif best_task.timing_cost == tasker.TIMING_COST.AROUND then
                     arrived = move_to_AROUND(best_position, best_direction)
-                elseif best_task.timing_cost == tasker.QUICK then
+                elseif best_task.timing_cost == tasker.TIMING_COST.QUICK then
                     arrived = move_to_QUICK(best_position, best_direction)
-                elseif best_task.timing_cost == tasker.URGENT then
+                elseif best_task.timing_cost == tasker.TIMING_COST.URGENT then
                     arrived = move_to_URGENT(best_position, best_direction)
-                elseif best_task.timing_cost == tasker.LIFE_OR_DEATH then
+                elseif best_task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH then
                     arrived = move_to_LIFE_OR_DEATH(best_position, best_direction)
                 end
                 if arrived then

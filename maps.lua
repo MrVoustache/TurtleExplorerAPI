@@ -5,10 +5,13 @@
 local heap = require "heap"
 local maps = {}
 
-maps.EAST = 0
-maps.SOUTH = 1
-maps.WEST = 2
-maps.NORTH = 3
+---@enum DIRECTION
+maps.DIRECTION = {          --- The four cardinal directions.
+    EAST = 0,               --- Towards east
+    SOUTH = 1,              --- Towards south
+    WEST = 2,               --- Towards west
+    NORTH = 3               --- Towards north
+}
 
 
 
@@ -59,36 +62,36 @@ function Position:__eq(pos2)
     return self.x == pos2.x and self.y == pos2.y and self.z == pos2.z
 end
 
---- Returns a new Position object that represents the same point using absolute coordinates, given the coordinates and orientation of the corresponding original position.
+--- Returns a new Position object that represents the same point using absolute coordinates, given the coordinates and direction of the corresponding original position.
 ---@param origin Position The original position with absolute coordinates.
----@param orientation number The orientation of the original east direction (0 if it was actually east, 1 if it was actually south, 2 if it was actually west, and 3 if it was actually north).
+---@param east_direction DIRECTION The direction of the original east direction (0 if it was actually east, 1 if it was actually south, 2 if it was actually west, and 3 if it was actually north).
 ---@return Position pos The new Position object with absolute coordinates.
-function Position:to_absolute(origin, orientation)
+function Position:to_absolute(origin, east_direction)
     if type(origin) ~= "table" or getmetatable(origin) ~= Position then
         error("expected position as argument #1, got '"..type(origin).."'", 2)
     end
-    if type(orientation) ~= "number" then
-        error("expected number as orientation, got '"..type(orientation).."'", 2)
+    if type(east_direction) ~= "number" then
+        error("expected number as direction, got '"..type(east_direction).."'", 2)
     end
     local newX, newY, newZ
-    if orientation == maps.EAST then
+    if east_direction == maps.DIRECTION.EAST then
         newX = origin.x + self.x
         newY = origin.y + self.y
         newZ = origin.z + self.z
-    elseif orientation == maps.SOUTH then
+    elseif east_direction == maps.DIRECTION.SOUTH then
         newX = origin.x - self.z
         newY = origin.y + self.y
         newZ = origin.z + self.x
-    elseif orientation == maps.WEST then
+    elseif east_direction == maps.DIRECTION.WEST then
         newX = origin.x - self.x
         newY = origin.y + self.y
         newZ = origin.z - self.z
-    elseif orientation == maps.NORTH then
+    elseif east_direction == maps.DIRECTION.NORTH then
         newX = origin.x + self.z
         newY = origin.y + self.y
         newZ = origin.z - self.x
     else
-        error("invalid orientation value", 2)
+        error("invalid direction value", 2)
     end
     return Position:new(newX, newY, newZ)
 end
@@ -130,16 +133,16 @@ function Position:north()
 end
 
 --- Returns the next block in the given cardinal direction.
----@param dir number The direction (a constant like maps.EAST).
+---@param dir DIRECTION The direction (a constant like maps.DIRECTION.EAST).
 ---@return Position next_block The next position in the given direction.
 function Position:in_direction(dir)
-    if dir == maps.EAST then
+    if dir == maps.DIRECTION.EAST then
         return self:east()
-    elseif dir == maps.SOUTH then
+    elseif dir == maps.DIRECTION.SOUTH then
         return self:south()
-    elseif dir == maps.WEST then
+    elseif dir == maps.DIRECTION.WEST then
         return self:west()
-    elseif dir == maps.NORTH then
+    elseif dir == maps.DIRECTION.NORTH then
         return self:north()
     end
     error("position should be one of the four cardinal direction constants, got "..tostring(dir), 2)
@@ -168,6 +171,9 @@ function Position:neighbors()
     end
 end
 
+--- Returns the direction from the position towards an adjacent position.
+---@param pos Position The position we are facing towards.
+---@return DIRECTION direction_towards The direction from the current position towards the given one.
 function Position:direction_to(pos)
     if type(pos) ~= "table" or getmetatable(pos) ~= Position then
         error("expected position as argument #1, got '"..type(pos).."'", 2)
@@ -176,13 +182,13 @@ function Position:direction_to(pos)
         error("to compute a direction, the two blocks must be at a Manhattan distance of exactly 1", 2)
     end
     if pos.x > self.x then
-        return maps.EAST
+        return maps.DIRECTION.EAST
     elseif pos.z > self.z then
-        return maps.SOUTH
+        return maps.DIRECTION.SOUTH
     elseif self.x > pos.x then
-        return maps.WEST
+        return maps.DIRECTION.WEST
     elseif self.z > pos.z then
-        return maps.NORTH
+        return maps.DIRECTION.NORTH
     else
         error("a cardinal direction only exists for horizontal directions, not above or below", 2)
     end
@@ -229,8 +235,8 @@ maps.distance = maps.euclidean_distance
 ---@param absolute1 Position The first absolute position.
 ---@param relative2 Position The second relative position corresponding to the second absolute position.
 ---@param absolute2 Position The second absolute position.
----@return number orientation The absolute direction of the east direction (0 if it is actually east, 1 if it is actually south, 2 if it is actually west, and 3 if it is actually north).
-function maps.get_absolute_orientation(relative1, absolute1, relative2, absolute2)
+---@return DIRECTION east_direction The absolute direction of the east direction (0 if it is actually east, 1 if it is actually south, 2 if it is actually west, and 3 if it is actually north).
+function maps.get_absolute_direction(relative1, absolute1, relative2, absolute2)
     if type(relative1) ~= "table" or getmetatable(relative1) ~= Position then
         error("expected position as argument #1, got '"..type(relative1).."'", 2)
     end
@@ -251,40 +257,40 @@ function maps.get_absolute_orientation(relative1, absolute1, relative2, absolute
         error("the two relative positions cannot be the same", 2)
     end
     if dxr == dxa and dzr == dza then
-        return maps.EAST
+        return maps.DIRECTION.EAST
     elseif dxr == -dza and dzr == dxa then
-        return maps.SOUTH
+        return maps.DIRECTION.SOUTH
     elseif dxr == -dxa and dzr == -dza then
-        return maps.WEST
+        return maps.DIRECTION.WEST
     elseif dxr == dza and dzr == -dxa then
-        return maps.NORTH
+        return maps.DIRECTION.NORTH
     else
-        error("the four positions belong to more than two orientations", 2)
+        error("the four positions belong to more than two directions", 2)
     end
 end
 
---- Returns a transformation function to convert relative positions to absolute positions given the coordinates and orientation of the corresponding original position or the relative and absolute positions of two points.
+--- Returns a transformation function to convert relative positions to absolute positions given the coordinates and directions of the corresponding original position or the relative and absolute positions of two points.
 ---@param origin Position The original position with absolute coordinates.
----@param orientation_or_relative_position number|Position The orientation of the original east direction (0 if it is actually east, 1 if it is actually south, 2 if it is actually west, and 3 if it is actually north) or the relative position corresponding to the original position.
+---@param direction_or_relative_position DIRECTION|Position The direction of the original east direction (0 if it is actually east, 1 if it is actually south, 2 if it is actually west, and 3 if it is actually north) or the relative position corresponding to the original position.
 ---@param absolute_position Position? The absolute position corresponding to the second relative position, required if the second argument is a relative position.
 ---@return fun(relative_position : Position): Position transform A function that takes a relative position and returns the corresponding absolute position.
-function maps.get_relative_to_absolute_transform(origin, orientation_or_relative_position, absolute_position)
+function maps.get_relative_to_absolute_transform(origin, direction_or_relative_position, absolute_position)
     if type(origin) ~= "table" or getmetatable(origin) ~= Position then
         error("expected position as argument #1, got '"..type(origin).."'", 2)
     end
-    local orientation
-    if type(orientation_or_relative_position) == "number" then
-        orientation = orientation_or_relative_position
-    elseif type(orientation_or_relative_position) == "table" and getmetatable(orientation_or_relative_position) == Position then
+    local direction
+    if type(direction_or_relative_position) == "number" then
+        direction = direction_or_relative_position
+    elseif type(direction_or_relative_position) == "table" and getmetatable(direction_or_relative_position) == Position then
         if absolute_position == nil then
             error("absolute_position is required when the second argument is a relative position", 2)
         end
-        orientation = maps.get_absolute_orientation(orientation_or_relative_position, origin, Position:new(), absolute_position)
+        direction = maps.get_absolute_direction(direction_or_relative_position, origin, Position:new(), absolute_position)
     else
-        error("orientation_or_relative_position must be either a number or a Position object", 2)
+        error("direction_or_relative_position must be either a number or a Position object", 2)
     end
     return function(relative_position)
-        return relative_position:to_absolute(origin, orientation)
+        return relative_position:to_absolute(origin, direction)
     end
 end
 
@@ -399,9 +405,13 @@ end
 
 
 
-maps.EMPTY = 0
-maps.SOLID = 1
-maps.BARRIER = 2
+---@enum STATUS
+maps.STATUS = {         --- The possibles statuses of blocks at a given location on a Map object.
+    EMPTY = 0,          --- There is nothing (air) in this position.
+    SOLID = 1,          --- There is a block in this position.
+    BARRIER = 2         --- This position is forbidden.
+}
+
 ---@class Map A map of a known area in the minecraft world, with information about blocks and properties of the area.
 ---@field status {Position: number} A table mapping positions to their status, which can be "empty", "solid", or "barrier".
 ---@field blocks {Position: string} A table mapping positions to the type of block at that position, which can be any string representing a block type.
@@ -451,14 +461,14 @@ function Map:set_position(pos, status, block_type)
     if block_type ~= nil and type(block_type) ~= "string" then
         error("block_type must be a string, not '" .. type(block_type) .. "'", 2)
     end
-    if status == maps.SOLID and block_type == nil then
+    if status == maps.STATUS.SOLID and block_type == nil then
         error("block_type cannot be nil if status is SOLID", 2)
     end
-    if status == maps.EMPTY and block_type ~= nil then
+    if status == maps.STATUS.EMPTY and block_type ~= nil then
         error("block type must be nil when status is EMPTY", 2)
     end
-    if status ~= maps.EMPTY and status ~= maps.SOLID and status ~= maps.BARRIER then
-        error("status must be either EMPTY(" .. maps.EMPTY .. "), SOLID(" .. maps.SOLID .. "), or BARRIER(" .. maps.BARRIER .. ")", 2)
+    if status ~= maps.STATUS.EMPTY and status ~= maps.STATUS.SOLID and status ~= maps.STATUS.BARRIER then
+        error("status must be either EMPTY(" .. maps.STATUS.EMPTY .. "), SOLID(" .. maps.STATUS.SOLID .. "), or BARRIER(" .. maps.STATUS.BARRIER .. ")", 2)
     end
     local h = pos:hash()
     if self.status[h] == nil then
@@ -534,14 +544,14 @@ function Map:__newindex(pos, info)
             return self:del_position(pos)
         end
         if type(info) == "number" then
-            if info ~= maps.EMPTY then
+            if info ~= maps.STATUS.EMPTY then
                 error("cannot set a non-EMPTY status without block type information", 2)
             end
-            return self:set_position(pos, maps.EMPTY)
+            return self:set_position(pos, maps.STATUS.EMPTY)
         end
         if type(info) == "table" and #info == 2 and type(info[1]) == "number" and type(info[2]) == "string" then
             local status, block = info[1], info[2]
-            if status ~= maps.SOLID and status ~= maps.BARRIER then
+            if status ~= maps.STATUS.SOLID and status ~= maps.STATUS.BARRIER then
                 error("cannot set position with block info on a status other than SOLID or BARRIER", 2)
             end
             return self:set_position(pos, status, block)
@@ -583,14 +593,14 @@ function maps.DEFAULT_PATH_CONDITION_CHECK(map, position)
     if map[position][1] == nil then
         return false
     end
-    return map[position][1] == maps.EMPTY
+    return map[position][1] == maps.STATUS.EMPTY
 end
 
 --- Returns a path as a list of positions to go from position 1 to position 2. Uses an A* algorithm.
 ---@param start_pos Position The starting position.
----@param start_direction number The starting orientation.
+---@param start_direction DIRECTION The starting direction.
 ---@param destination_pos Position The destination position.
----@param destination_direction number? The optional destination orientation. Set to nil to just reach the destination position no matter the destination orientation.
+---@param destination_direction DIRECTION? The optional destination direction. Set to nil to just reach the destination position no matter the destination direction.
 ---@param condition (fun(map: Map, position: Position) : boolean)? A function to check that a given position can be traversed. Defaults to checking that that position is empty and known.
 ---@param costs {turning: number, forward: number, up: number, down: number}? A table with values for "turning", "forward", "up" and "down" indicating the costs of these movements for computing the path. Defaults to 4 for moving and 3 for turning
 ---@return Position[]? path A shortest path from the starting point to the destination if a valid one exists (nil otherwise).
@@ -635,7 +645,7 @@ function Map:find_path(start_pos, start_direction, destination_pos, destination_
 
     --- A function hash a (Position, direction) pair.
     ---@param pos Position
-    ---@param dir number
+    ---@param dir DIRECTION
     ---@return string hash
     local function hash_pair(pos, dir)
         return pos:hash()..";"..dir
@@ -646,9 +656,9 @@ function Map:find_path(start_pos, start_direction, destination_pos, destination_
     local to_do_heap = heap.Heap:new(function(h) return h end) ---@type Heap<string> The binary heap for fast queue operations.
     to_do_heap:push(start_hash, distance_to_destination_heuristic(start_pos))
     local to_do_pos = {[start_hash] = start_pos} ---@type {string: Position} The positions to look at.
-    local to_do_dir = {[start_hash] = start_direction} ---@type {string: number} The directions to look at.
+    local to_do_dir = {[start_hash] = start_direction} ---@type {string: DIRECTION} The directions to look at.
     local parents_pos = {} ---@type {string: Position} The previous positions to rebuild the path.
-    local parents_dir = {} ---@type {string: number} The previous directions to rebuild the path.
+    local parents_dir = {} ---@type {string: DIRECTION} The previous directions to rebuild the path.
     local cost = {[start_hash] = 0} ---@type {string: number} The score of the shortest path to each (position, direction) pair.
     local heuristic = {[start_hash] = distance_to_destination_heuristic(destination_pos)} ---@type {string: number} The heuristic score for reaching the destination by passing by this position.
 

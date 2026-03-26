@@ -4,12 +4,14 @@ local maps = require "maps"
 local blocks = require "blocks"
 local tasker = {}
 
-tasker.LIFE_OR_DEATH = -1       --- The task cannot wait, it is a life or death matter. The turtle may go through liquids or unexplored regions.
-tasker.URGENT = 0               --- The task must be performed as quickly as possible. The turtle cannot stop to perform any other task along the journey to the actual matter.
-tasker.QUICK = 1                --- The task is to important but the turtle can stop to handle other tasks along the way as long as they do not imply that the turtle moves.
-tasker.AROUND = 2               --- The task is not urgent and the turtle can turn around (but not move up/down/forward/backward) to perform another task along the way.
-tasker.NEAR = 3                 --- The task can wait and the turtle may move at most 2 blocks away to perform other tasks along the way.
-
+---@enum TIMING_COST
+tasker.TIMING_COST = {        --- Defines how urgent the task is and how the turtle may move to the location to accomplish the task.
+    LIFE_OR_DEATH = -1,       --- The task cannot wait, it is a life or death matter. The turtle may go through liquids or unexplored regions.
+    URGENT = 0,               --- The task must be performed as quickly as possible. The turtle cannot stop to perform any other task along the journey to the actual matter.
+    QUICK = 1,                --- The task is to important but the turtle can stop to handle other tasks along the way as long as they do not imply that the turtle moves.
+    AROUND = 2,               --- The task is not urgent and the turtle can turn around (but not move up/down/forward/backward) to perform another task along the way.
+    NEAR = 3                  --- The task can wait and the turtle may move at most 2 blocks away to perform other tasks along the way.
+}
 
 
 
@@ -19,7 +21,7 @@ tasker.NEAR = 3                 --- The task can wait and the turtle may move at
 ---@field check_on_move boolean If checking if the task can be accomplished is useful on turtle unrelated move. (Useful for tasks that may be done in many positions, but don't require to move.)
 ---@field enabled boolean If the task is currently enabled or not. Note that an enabled task must return at least one position when asked.
 ---@field identifier integer A unique identifier for the task.
----@field timing_cost integer A value indicating if the turtle has time to perform other tasks along the way when getting to the location of the task. Can be one of tasker.URGENT, tasker.QUICK, tasker.AROUND, tasker.NEAR or tasker.LIFE_OR_DEATH.
+---@field timing_cost TIMING_COST A value indicating if the turtle has time to perform other tasks along the way when getting to the location of the task. Can be one of tasker.TIMING_COST.URGENT, tasker.TIMING_COST.QUICK, tasker.TIMING_COST.AROUND, tasker.TIMING_COST.NEAR or tasker.TIMING_COST.LIFE_OR_DEATH.
 ---@field priority integer A value used to sort the different tasks. A task with lower priority will be executed before others.
 ---@field path_costs {turning: number, up: number, down: number, forward: number}? A table indicating the costs for building a path to a target destination od the task.
 local Task = {}
@@ -37,15 +39,15 @@ function Task:new()
     identifier = identifier + 1
     task.identifier = identifier
     task.enabled = false
-    task.timing_cost = tasker.NEAR
+    task.timing_cost = tasker.TIMING_COST.NEAR
     task.priority = 0
     return task
 end
 
 --- Tries to perform the task at the given position. If the position is not right, simply return false. If check_on_move is true, everytime the turtle moves, this function will be called.
 ---@param pos Position The current turtle position.
----@param direction number The current turtle direction.
----@param freedom integer? One of the three secondary objective limitation constants (tasker.QUICK, tasker.AROUND, tasker.NEAR) if the task was is being run as a secondary objective, or nil if the turtle went to the current position specifically for this task.
+---@param direction DIRECTION The current turtle direction.
+---@param freedom TIMING_COST? One of the three secondary objective limitation constants (tasker.TIMING_COST.QUICK, tasker.TIMING_COST.AROUND, tasker.TIMING_COST.NEAR) if the task was is being run as a secondary objective, or nil if the turtle went to the current position specifically for this task.
 ---@return boolean success If the entire task succeeded and is finished.
 function Task:perform(pos, direction, freedom)
     error("subclasses of task must override this method", 2)
@@ -58,9 +60,9 @@ end
 
 --- Returns an array of positions in which the task should lead the turtle to. If the turtle
 ---@param current_position Position The current position of the turtle at the time of the request.
----@param current_direction number The current orientation of the turtle at the time of the request.
+---@param current_direction DIRECTION The current orientation of the turtle at the time of the request.
 ---@return Position[] positions Most of the positions (you can limit it to the closest for example).
----@return number[]? directions If necessary, the directions in which the turtle should look at when reaching any of the corresponding positions. It can be a table with number indexes only on the position indexes that require a specific orientation.
+---@return DIRECTION[]? directions If necessary, the directions in which the turtle should look at when reaching any of the corresponding positions. It can be a table with number indexes only on the position indexes that require a specific orientation.
 function Task:positions(current_position, current_direction)
     error("subclasses of task must override this method", 2)
 end
@@ -96,15 +98,15 @@ end
 
 --- Called by the scheduler when the position or direction of the turtle changes.
 ---@param new_position Position The new position the turtle is at.
----@param new_direction Position The new direction the turtle is facing.
+---@param new_direction DIRECTION The new direction the turtle is facing.
 function Task:on_move(new_position, new_direction)
 end
 
 --- Called by the scheduler when the turtle was trying to move to a given target position and direction to accomplish this task, when the path was obstructed.
 ---@param target_pos Position The position that the task asked to reach.
----@param target_dir number? The corresponding direction the task asked to reach.
+---@param target_dir DIRECTION? The corresponding direction the task asked to reach.
 ---@param current_pos Position The current position where the turtle got stuck.
----@param current_dir number The current direction.
+---@param current_dir DIRECTION The current direction.
 ---@return boolean? cancel If this function returns true, the ongoing scheduler will interrupt the process of reaching this position and will choose again a task to run.
 function Task:on_path_obstructed(target_pos, target_dir, current_pos, current_dir)
 end
@@ -117,14 +119,14 @@ end
 ---@param m Map
 ---@param p Position
 function tasker.walkable_safe(m, p)
-    return m[p] ~= nil and m[p][1] == maps.EMPTY
+    return m[p] ~= nil and m[p][1] == maps.STATUS.EMPTY
 end
 
 --- Tells if the turtle can possibly move through the block at the given coordinates according to the map, going through liquids and barriers.
 ---@param m Map
 ---@param p Position
 function tasker.walkable_life_or_death(m, p)
-    return m[p] == nil or m[p][1] == maps.EMPTY or blocks.is_liquid(m[p][2])
+    return m[p] == nil or m[p][1] == maps.STATUS.EMPTY or blocks.is_liquid(m[p][2])
 end
 
 

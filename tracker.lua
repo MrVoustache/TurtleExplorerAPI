@@ -8,7 +8,7 @@ local tracker = {}
 
 
 local position = maps.Position:new(0, 0, 0)
-local direction = maps.EAST
+local direction = maps.DIRECTION.EAST
 local POSITION_FILE = ".pos"
 local position_changed = false
 
@@ -144,7 +144,7 @@ function tracker.get_position()
 end
 
 --- Returns the current known direction of the turtle
----@return integer current The current orientation
+---@return DIRECTION current The current orientation
 function tracker.get_direction()
     return direction
 end
