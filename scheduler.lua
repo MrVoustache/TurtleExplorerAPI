@@ -965,3 +965,5 @@ while #mandatory_threads > 0 do
         end
     end
 end
+
+_G.scheduler = nil
