@@ -8,6 +8,14 @@ local tracker = require "tracker"
 _G.scheduler = {}
 
 local MAP_FILE = ".map"
+local LOG_FILE = ".scheduler.log"
+local LOG_TO_PRINT = {
+    ["debug"] = false,
+    ["info"] = false,
+    ["warning"] = true,
+    ["error"] = true,
+    ["critical"] = true
+}
 
 FORGET_DELAY = 5.0
 
@@ -23,6 +31,9 @@ local blocks_to_forget = {}     ---@type {number: Position} Timer indentifiers c
 local moving_locked = false
 local turting_locked = false
 local lock_position = nil           ---@type Position?
+
+local log_file = fs.open(LOG_FILE, "w")
+log_file.write("Started scheduler at "..textutils.formatTime(os.time()))
 
 
 
@@ -40,15 +51,35 @@ end
 ---@param message string The message itself.
 local function log(level, message)
     if level == "debug" then
-        printColor(message, colors.gray)
+        if LOG_TO_PRINT["debug"] then
+            printColor(message, colors.gray)
+        end
+        log_file.write("[DEBUG]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.flush()
     elseif level == "info" then
-        printColor(message, colors.white)
+        if LOG_TO_PRINT["debug"] then
+            printColor(message, colors.white)
+        end
+        log_file.write("[INFO]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.flush()
     elseif level == "warning" then
-        printColor(message, colors.yellow)
+        if LOG_TO_PRINT["debug"] then
+            printColor(message, colors.yellow)
+        end
+        log_file.write("[WARNING]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.flush()
     elseif level == "error" then
-        printColor(message, colors.orange)
+        if LOG_TO_PRINT["debug"] then
+            printColor(message, colors.orange)
+        end
+        log_file.write("[ERROR]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.flush()
     elseif level == "critical" then
-        printColor(message, colors.red)
+        if LOG_TO_PRINT["debug"] then
+            printColor(message, colors.red)
+        end
+        log_file.write("[CRITICAL]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.flush()
     else
         error("level should be one of 'debug', 'info', 'warning', 'error' or 'critical', got '"..tostring(level).."'", 2)
     end
@@ -967,3 +998,4 @@ while #mandatory_threads > 0 do
 end
 
 _G.scheduler = nil
+log_file.close()
