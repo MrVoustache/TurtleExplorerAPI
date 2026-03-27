@@ -124,6 +124,36 @@ local function signal_move()
     end
 end
 
+--- Returns the list of active tasks that the scheduler is trying to accomplish.
+---@return Task[] tasks The active tasks.
+function scheduler.active_tasks()
+    local tasks = {}
+    while not active_tasks:acquire() do
+        sleep(0.01)
+    end
+    for task in active_tasks:iter() do
+        table.insert(tasks, task)
+    end
+    active_tasks:release()
+    return tasks
+end
+
+--- Returns the list of idle (sleeping) tasks that the scheduler may have to run at some point.
+---@return Task[] tasks The idle tasks.
+function scheduler.idle_tasks()
+    local tasks = {}
+    for index, task in pairs(idle_tasks) do
+        table.insert(tasks, task)
+    end
+    return tasks
+end
+
+--- Returns the task that the scheduler has selected as main task and is moving to perform or already performing.
+---@return Task? current_task The current task if any.
+function scheduler.current_task()
+    return current_task
+end
+
 
 
 
@@ -956,6 +986,7 @@ local function do_tasks()
                         active_tasks:push(best_task, best_task.priority)
                     end
                 end
+                current_task = nil
             else
                 coroutine.yield()
             end
