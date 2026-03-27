@@ -10,6 +10,8 @@ local tracker = {}
 local position = maps.Position:new(0, 0, 0)
 local direction = maps.DIRECTION.EAST
 local POSITION_FILE = ".pos"
+local dictionary = {}       ---@type {[string]: {[1]: Position, [2]: DIRECTION?}}
+local DICTIONARY_FILE = ".pos_dict"
 local position_changed = false
 
 local function load_position()
@@ -42,6 +44,58 @@ local function save_position()
     file.close()
 end
 
+
+
+
+
+local function load_dictionary()
+    local file = fs.open(DICTIONARY_FILE, "r")
+    local new_dictionary, err = textutils.unserialiseJSON(file.readAll())
+    if new_dictionary == nil then
+        error("corrupted dictionary file: "..err, 1)
+    end
+    if type(new_dictionary) ~= "table" then
+        error("dictionary file did not contain a table but a '"..type(new_dictionary).."'", 1)
+    end
+    for k, v in pairs(new_dictionary) do
+        if type(k) ~= "string" then
+            error("a dictionary key was not a string, but a '"..type(k).."'", 1)
+        end
+        if type(v) ~= "table" then
+            error("a dictionary value was not a table, but a '"..type(v).."'", 1)
+        end
+        local n = 0
+        for k2, v2 in pairs(v) do
+            n = n + 1
+        end
+        if n < 1 or n > 2 then
+            error("a dictionary entry did not contain one or two elements, but "..n, 1)
+        end
+        if v[1] == nil or type(v[1]) ~= "table" or getmetatable(v[1]) ~= maps.Position then
+            error("first element of entry is not a Position object, but a '"..type(v[1]).."'", 1)
+        end
+        if n == 2 and v[2] ~= nil then
+            error("a dictionary value was not an array", 1)
+        end
+        if v[2] ~= nil and (type(v[2]) ~= "number" or v[2] < 0 or v[2] > 3 or v[2] ~= math.floor(v[2])) then
+            error("second element of entry is not a DIRECTION", 1)
+        end
+    end
+    dictionary = new_dictionary
+end
+
+if fs.exists(DICTIONARY_FILE) and not fs.isDir(DICTIONARY_FILE) then
+    local ok, err = pcall(load_dictionary)
+    if not ok then
+        printError("Failed to load dictionary file: "..err)
+    end
+end
+
+local function save_dictionary()
+    local file = fs.open(DICTIONARY_FILE, "w")
+    file.write(textutils.serialiseJSON(dictionary))
+    file.close()
+end
 
 
 
@@ -147,6 +201,58 @@ end
 ---@return DIRECTION current The current orientation
 function tracker.get_direction()
     return direction
+end
+
+--- Returns the array of the existing position names in the position dictionary.
+---@return string[] names The existing names.
+function tracker.get_dict_names()
+    local names = {}
+    for name, entry in pairs(dictionary) do
+        table.insert(names, name)
+    end
+    return names
+end
+
+--- Returns the position anv eventual direction associated with this name in the dictionary.
+---@param name string The name to look for.
+---@return Position? position The corresponding position if the name is in the dictionary.
+---@return DIRECTION? direction The eventual direction associated with the position.
+function tracker.get_dict_entry(name)
+    if type(name) ~= "string" then
+        error("expected string for argument, got '"..type(name).."'", 2)
+    end
+    local entry = dictionary[name]
+    if entry ~= nil then
+        return dictionary[name][1], dictionary[name][2]
+    end
+end
+
+--- Sets or deletes the entry in the dictionary with the associated name.
+---@param name string The name of the entry.
+---@param position Position? The position to set or nil to delete.
+---@param direction DIRECTION? The eventual associated direction, or nil to delete.
+function tracker.set_dict_entry(name, position, direction)
+    if type(name) ~= "string" then
+        error("expected string for argument, got '"..type(name).."'", 2)
+    end
+    if position == nil and direction ~= nil then
+        error("if position (argument #2) is nil, then direction (argument #3) should also be nil", 2)
+    end
+    if position ~= nil and (type(position) ~= "table" or getmetatable(position) ~= maps.Position) then
+        error("expected Position or nil for second argument, got '"..type(position).."'", 2)
+    end
+    if direction ~= nil and type(direction) ~= "number" then
+        error("expected number or nil for third argument, got '"..type(direction).."'", 2)
+    end
+    if direction ~= nil and (direction < 0 or direction > 3 or direction ~= math.floor(direction)) then
+        error("expected integer between 0 and 3 inclusive for direction, got "..tostring(direction), 2)
+    end
+    if position == nil then
+        dictionary[name] = nil
+    else
+        dictionary[name] = {position, direction}
+    end
+    save_dictionary()
 end
 
 
