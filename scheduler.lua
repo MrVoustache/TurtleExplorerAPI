@@ -5,6 +5,10 @@ local heap = require "heap"
 local maps = require "maps"
 local tasker = require "tasker"
 local tracker = require "tracker"
+if _G.scheduler ~= nil then
+    printError("A scheduler is already running.")
+    return
+end
 _G.scheduler = {}
 
 local MAP_FILE = ".map"
