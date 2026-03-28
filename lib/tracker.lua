@@ -13,18 +13,33 @@ local POSITION_FILE = ".pos"
 local dictionary = {}       ---@type {[string]: {[1]: Position, [2]: DIRECTION?}}
 local DICTIONARY_FILE = ".pos_dict"
 local position_changed = false
+local safe_loaded = false
+
+local old_turn_left = turtle.turnLeft
+local old_turn_right = turtle.turnRight
+local old_forward = turtle.forward
+local old_up = turtle.up
+local old_down = turtle.down
+local old_back = turtle.back
+
+
+
+
 
 local function load_position()
-    local file = fs.open(POSITION_FILE, "r")
-    local x, y, z, d = tonumber(file.readLine()), tonumber(file.readLine()), tonumber(file.readLine()), tonumber(file.readLine())
-    if x == nil or y == nil or z == nil or d == nil then
-        error("corrupted position file", 1)
+    if os.getComputerLabel() == nil then
+        local file = fs.open(POSITION_FILE, "r")
+        local x, y, z, d = tonumber(file.readLine()), tonumber(file.readLine()), tonumber(file.readLine()), tonumber(file.readLine())
+        if x == nil or y == nil or z == nil or d == nil then
+            error("corrupted position file", 1)
+        end
+        local remaining = file.readAll()
+        assert(remaining == "", "remaining content in position file: '"..remaining.."'")
+        position = maps.Position:new(x, y, z)
+        direction = d
+        safe_loaded = true
+        file.close()
     end
-    local remaining = file.readAll()
-    assert(remaining == "", "remaining content in position file: '"..remaining.."'")
-    position = maps.Position:new(x, y, z)
-    direction = d
-    file.close()
 end
 
 if fs.exists(POSITION_FILE) then
@@ -42,6 +57,52 @@ local function save_position()
     file.writeLine(tostring(position.z))
     file.write(tostring(direction))
     file.close()
+end
+
+if not safe_loaded then
+    local x, y, z = gps.locate()
+    if x then
+        local p1 = maps.Position:new(x, y, z)
+        -- 1. Try moving Forward
+        if old_forward() then
+            local x2, y2, z2 = gps.locate()
+            if x2 then
+                local p2 = maps.Position:new(x2, y2, z2)
+                direction = p1:direction_to(p2)
+                position = p2
+                safe_loaded = true
+            end
+        -- 2. Try moving Back
+        elseif old_back() then
+            local x2, y2, z2 = gps.locate()
+            if x2 then
+                local p2 = maps.Position:new(x2, y2, z2)
+                -- If we moved back, the direction we are FACING is p2 -> p1
+                direction = p2:direction_to(p1)
+                position = p2
+                safe_loaded = true
+            end
+        else
+            old_turn_left()
+            if old_forward() then
+                local x2, y2, z2 = gps.locate()
+                if x2 then
+                    local p2 = maps.Position:new(x2, y2, z2)
+                    direction = p1:direction_to(p2)
+                    position = p2
+                    safe_loaded = true
+                end
+            elseif old_back() then
+                local x2, y2, z2 = gps.locate()
+                if x2 then
+                    local p2 = maps.Position:new(x2, y2, z2)
+                    direction = p2:direction_to(p1)
+                    position = p2
+                    safe_loaded = true
+                end
+            end
+        end
+    end
 end
 
 
@@ -101,7 +162,6 @@ end
 
 
 
-local old_turn_left = turtle.turnLeft
 function turtle.turnLeft()
     local ok = old_turn_left()
     if ok then
@@ -114,7 +174,6 @@ function turtle.turnLeft()
     return ok
 end
 
-local old_turn_right = turtle.turnRight
 function turtle.turnRight()
     local ok = old_turn_right()
     if ok then
@@ -127,7 +186,6 @@ function turtle.turnRight()
     return ok
 end
 
-local old_forward = turtle.forward
 function turtle.forward()
     local ok, err = old_forward()
     if ok then
@@ -137,7 +195,6 @@ function turtle.forward()
     return ok, err
 end
 
-local old_up = turtle.up
 function turtle.up()
     local ok, err = old_up()
     if ok then
@@ -147,7 +204,6 @@ function turtle.up()
     return ok, err
 end
 
-local old_down = turtle.down
 function turtle.down()
     local ok, err = old_down()
     if ok then
@@ -157,11 +213,10 @@ function turtle.down()
     return ok, err
 end
 
-local old_back = turtle.back
 function turtle.back()
     local ok, err = old_back()
     if ok then
-        position = position:in_direction(-direction % 4)
+        position = position:in_direction((direction + 2) % 4)
         position_changed = true
     end
     return ok, err
