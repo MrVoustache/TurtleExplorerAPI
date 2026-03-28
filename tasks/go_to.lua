@@ -8,7 +8,7 @@ local go_to = {}
 ---@class GoToTask: Task A subclass of Task that enables the turtle to travel to a specific location.
 ---@field target_position Position The position that the turtle should reach to complete the task.
 ---@field target_direction DIRECTION? The direction to face when arriving to the target position.
----@field prompt boolean If the turtle should display a prompt before moving on.
+---@field callback fun()? A function to call once the turtle reaches the destination of the task.
 local GoToTask = {}
 GoToTask.__name = "GoToTask"
 GoToTask.__index = GoToTask
@@ -22,8 +22,8 @@ go_to.GoToTask = GoToTask
 --- Creates a new go_to task for the given target position.
 ---@param target_position Position The position to reach.
 ---@param target_direction DIRECTION? An optional direction to face when arriving at position.
----@param prompt boolean? Whether or not to display a prompt one the destination has been reached. Defaults to true.
-function GoToTask:new(target_position, target_direction, prompt)
+---@param callback fun()? A function to call when the turtle reaches its destination. Can be nil.
+function GoToTask:new(target_position, target_direction, callback)
     if type(target_position) ~= "table" or getmetatable(target_position) ~= maps.Position then
         error("expected Position for argument #1, got '"..type(target_position).."'", 2)
     end
@@ -33,16 +33,24 @@ function GoToTask:new(target_position, target_direction, prompt)
     if target_direction ~= nil and (math.floor(target_direction) ~= target_direction or target_direction < 0 or target_direction > 3) then
         error("expected maps.DIRECTION for argument #2, got "..tostring(target_direction))
     end
-    if prompt == nil then
-        prompt = true
-    end
-    if type(prompt) ~= "boolean" then
-        error("expected boolean or nil for argument #3, got '"..type(prompt).."'", 2)
+    if callback ~= nil and type(callback) ~= "function" then
+        error("expected function or nil for argument #3, got '"..type(callback).."'", 2)
     end
     tasker.Task.new(self)
     self.target_position = target_position
     self.target_direction = target_direction
-    self.prompt = prompt
+    self.callback = callback
+end
+
+--- A simple function that prompts the user once the turtle has reached its destination.
+function go_to.prompt_on_arrival()
+    print("Arrived at position. Press any key to continue.")
+    while true do
+        local event = {os.pullEvent()}
+        if event[1] == "key" then
+            break
+        end
+    end
 end
 
 
@@ -55,14 +63,8 @@ end
 ---@param freedom TIMING_COST? One of the three secondary objective limitation constants (tasker.TIMING_COST.QUICK, tasker.TIMING_COST.AROUND, tasker.TIMING_COST.NEAR) if the task was is being run as a secondary objective, or nil if the turtle went to the current position specifically for this task.
 ---@return boolean success If the entire task succeeded and is finished.
 function GoToTask:perform(pos, direction, freedom)
-    if self.prompt then
-        print("Arrived at position. Press any key to continue.")
-        while true do
-            local event = {os.pullEvent()}
-            if event[1] == "key" then
-                break
-            end
-        end
+    if self.callback ~= nil then
+        pcall(self.callback)
     end
     return true
 end
