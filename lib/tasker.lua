@@ -111,6 +111,13 @@ end
 function Task:on_path_obstructed(target_pos, target_dir, current_pos, current_dir)
 end
 
+--- Called by the scheduler when it could not find a path to any of the positions returned by Task:positions and thus, the task cannot be accomplished for now.
+---@param current_pos Position The current turtle position.
+---@param current_dir DIRECTION The current turtle direction.
+---@return boolean? disable If this function returns true, the scheduler disables the task.
+function Task:on_no_reacheable_positions(current_pos, current_dir)
+end
+
 
 
 

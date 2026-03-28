@@ -879,123 +879,135 @@ end
 
 local function do_tasks()
     while true do
-        local first_task = active_tasks:pop()
+        log("debug", "about to select a task to run")
+        local current_pos, current_dir = tracker.get_position(), tracker.get_direction()
+        local all_tasks = {}        ---@type {[integer]: Task}
+        while #active_tasks > 0 do
+            local first_task = active_tasks:pop()
 
-        if first_task then
-            log("debug", "about to select a task to run")
-            local current_pos, current_dir = tracker.get_position(), tracker.get_direction()
-            local first_positions, first_directions = first_task:positions(current_pos, current_dir)
-            local task_positions = {[first_task] = first_positions}     ---@type {[Task]: Position[]}
-            local task_directions = first_directions ~= nil and {[first_task] = first_directions} or {}     ---@type {[Task]: DIRECTION[]}
-            local all_tasks = {}        ---@type {[integer]: Task}
-            current_priority = first_task.priority
-            local total_positions = 0
-            local total_tasks = 0
+            if first_task then
+                local first_positions, first_directions = first_task:positions(current_pos, current_dir)
+                local task_positions = {[first_task] = first_positions}     ---@type {[Task]: Position[]}
+                local task_directions = first_directions ~= nil and {[first_task] = first_directions} or {}     ---@type {[Task]: DIRECTION[]}
+                all_tasks[first_task.identifier] = first_task
+                current_priority = first_task.priority
+                log("debug", "enumerating tasks of priority "..current_priority..".")
+                local total_positions = 0
+                local total_tasks = 0
 
-            while active_tasks:next_priority() == current_priority do
-                total_tasks = total_tasks + 1
-                local next_task = active_tasks:pop()
-                local next_positions, next_directions = next_task:positions(current_pos, current_dir)
-                total_positions = total_positions + #next_positions
-                all_tasks[next_task.identifier] = next_task
-                task_positions[next_task] = next_positions
-                if next_directions ~= nil then
-                    task_directions[next_task] = task_directions
-                end
-            end
-            log("debug", "got "..total_tasks.." possible tasks with "..total_positions.." positions to select from.")
-
-            local seen = {}
-            local best_task = nil
-            local best_position = nil
-            local best_direction = nil
-            local best_distance = math.huge
-
-            while next(task_positions) ~= nil do
-
-                for task, positions in pairs(task_positions) do
-                    local directions = task_directions[task]
-                    local closest_position = nil
-                    local closest_index = nil
-                    local distance = math.huge
-
-                    for index, pos in pairs(positions) do
-                        if current_pos:manhattan_distance_to(pos) < distance then
-                            distance = current_pos:manhattan_distance_to(pos)
-                            closest_position = pos
-                            closest_index = index
-                        end
+                while active_tasks:next_priority() == current_priority do
+                    total_tasks = total_tasks + 1
+                    local next_task = active_tasks:pop()
+                    local next_positions, next_directions = next_task:positions(current_pos, current_dir)
+                    total_positions = total_positions + #next_positions
+                    all_tasks[next_task.identifier] = next_task
+                    task_positions[next_task] = next_positions
+                    if next_directions ~= nil then
+                        task_directions[next_task] = task_directions
                     end
+                end
+                log("debug", "got "..total_tasks.." possible tasks with "..total_positions.." positions to select from.")
 
-                    if distance >= best_distance then
-                        total_positions = total_positions - #positions
-                        total_tasks = total_tasks - 1
-                        log("debug", "task unsatisfactory for now: "..total_tasks.." tasks remaining with "..total_positions.." positions.")
-                        task_positions[task] = nil
-                        task_directions[task] = nil
-                    else
-                        if closest_index == nil or closest_position == nil then
-                            error("should not have ended up there", 1)
-                        end
-                        local closest_direction = directions ~= nil and directions[closest_index] or nil
-                        positions[closest_index] = nil
-                        total_positions = total_positions - 1
-                        log("debug", "searching a path to "..tostring(closest_position)..".")
+                local seen = {}
+                local best_task = nil
+                local best_position = nil
+                local best_direction = nil
+                local best_distance = math.huge
 
-                        if seen[closest_position:hash()..closest_direction..tostring(task.timing_cost)] == nil then
-                            local path = map:find_path(current_pos, current_dir, closest_position, closest_direction, task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH and tasker.walkable_life_or_death or tasker.walkable_safe, task.path_costs)
-                            if path ~= nil and #path - 1 < best_distance then
-                                best_distance = #path - 1
-                                best_direction = closest_direction
-                                best_position = closest_position
-                                best_task = task
-                                log("debug", "found a new best path with distance "..best_distance..".")
+                while next(task_positions) ~= nil do
+
+                    for task, positions in pairs(task_positions) do
+                        local directions = task_directions[task]
+                        local closest_position = nil
+                        local closest_index = nil
+                        local distance = math.huge
+
+                        for index, pos in pairs(positions) do
+                            if current_pos:manhattan_distance_to(pos) < distance then
+                                distance = current_pos:manhattan_distance_to(pos)
+                                closest_position = pos
+                                closest_index = index
                             end
-                            seen[closest_position:hash()..closest_direction..tostring(task.timing_cost)] = true
+                        end
+
+                        if distance >= best_distance then
+                            total_positions = total_positions - #positions
+                            total_tasks = total_tasks - 1
+                            log("debug", "task unsatisfactory for now: "..total_tasks.." tasks remaining with "..total_positions.." positions.")
+                            task_positions[task] = nil
+                            task_directions[task] = nil
+                        else
+                            if closest_index == nil or closest_position == nil then
+                                error("should not have ended up there", 1)
+                            end
+                            local closest_direction = directions ~= nil and directions[closest_index] or nil
+                            positions[closest_index] = nil
+                            total_positions = total_positions - 1
+                            log("debug", "searching a path to "..tostring(closest_position)..".")
+
+                            if seen[closest_position:hash()..closest_direction..tostring(task.timing_cost)] == nil then
+                                local path = map:find_path(current_pos, current_dir, closest_position, closest_direction, task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH and tasker.walkable_life_or_death or tasker.walkable_safe, task.path_costs)
+                                if path ~= nil and #path - 1 < best_distance then
+                                    best_distance = #path - 1
+                                    best_direction = closest_direction
+                                    best_position = closest_position
+                                    best_task = task
+                                    log("debug", "found a new best path with distance "..best_distance..".")
+                                end
+                                seen[closest_position:hash()..closest_direction..tostring(task.timing_cost)] = true
+                            end
                         end
                     end
                 end
-            end
 
-            if best_task ~= nil then
-                all_tasks[best_task.identifier] = nil
-            end
-            for identifier, task in pairs(all_tasks) do
-                active_tasks:push(task, task.priority)
-            end
-
-            if best_task ~= nil and best_position ~= nil then
-                log("info", "selected a task and path to its destination.")
-                local arrived = false
-                current_task = best_task
-                if best_task.timing_cost == tasker.TIMING_COST.NEAR then
-                    arrived = move_to_NEAR(best_position, best_direction)
-                elseif best_task.timing_cost == tasker.TIMING_COST.AROUND then
-                    arrived = move_to_AROUND(best_position, best_direction)
-                elseif best_task.timing_cost == tasker.TIMING_COST.QUICK then
-                    arrived = move_to_QUICK(best_position, best_direction)
-                elseif best_task.timing_cost == tasker.TIMING_COST.URGENT then
-                    arrived = move_to_URGENT(best_position, best_direction)
-                elseif best_task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH then
-                    arrived = move_to_LIFE_OR_DEATH(best_position, best_direction)
-                end
-                if arrived then
-                    log("debug", "arrived at task destination.")
-                    local ok, err_or_done = pcall(best_task.perform, best_task, tracker.get_position(), tracker.get_direction())
-                    if not ok then
-                        log("error", "main task failed to perform: "..err_or_done)
-                    elseif err_or_done then
-                        log("debug", "main task finished: "..tostring(best_task))
-                    elseif not err_or_done and best_task.enabled then
-                        active_tasks:push(best_task, best_task.priority)
+                if best_task == nil then
+                    log("warning", "could not find a best path among the tasks to run of priority "..current_priority..".")
+                    log("info", "warning tasks of their unreachability.")
+                    for identifier, task in pairs(all_tasks) do
+                        local ok, err_or_disable = pcall(tasker.Task.on_no_reacheable_positions, task, current_pos, current_dir)
+                        if not ok then
+                            log("error", "a task failed to answer the call to 'on_no_reachable_positions': "..tostring(task)..": "..err_or_disable)
+                        else
+                            if err_or_disable then
+                                task:disable()
+                            end
+                        end
                     end
+                else
+                    all_tasks[best_task.identifier] = nil
+                    if best_position ~= nil then
+                        log("info", "selected a task and path to its destination.")
+                        local arrived = false
+                        current_task = best_task
+                        if best_task.timing_cost == tasker.TIMING_COST.NEAR then
+                            arrived = move_to_NEAR(best_position, best_direction)
+                        elseif best_task.timing_cost == tasker.TIMING_COST.AROUND then
+                            arrived = move_to_AROUND(best_position, best_direction)
+                        elseif best_task.timing_cost == tasker.TIMING_COST.QUICK then
+                            arrived = move_to_QUICK(best_position, best_direction)
+                        elseif best_task.timing_cost == tasker.TIMING_COST.URGENT then
+                            arrived = move_to_URGENT(best_position, best_direction)
+                        elseif best_task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH then
+                            arrived = move_to_LIFE_OR_DEATH(best_position, best_direction)
+                        end
+                        if arrived then
+                            log("debug", "arrived at task destination.")
+                            local ok, err_or_done = pcall(best_task.perform, best_task, tracker.get_position(), tracker.get_direction())
+                            if not ok then
+                                log("error", "main task failed to perform: "..err_or_done)
+                            elseif err_or_done then
+                                log("debug", "main task finished: "..tostring(best_task))
+                            elseif not err_or_done and best_task.enabled then
+                                active_tasks:push(best_task, best_task.priority)
+                            end
+                        end
+                    end
+                    break
                 end
-                current_task = nil
-            else
-                coroutine.yield()
             end
-        else
-            coroutine.yield()
+        end
+        for identifier, task in pairs(all_tasks) do
+            active_tasks:push(task, task.priority)
         end
     end
 end
