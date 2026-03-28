@@ -882,6 +882,8 @@ local function do_tasks()
         log("debug", "about to select a task to run")
         local current_pos, current_dir = tracker.get_position(), tracker.get_direction()
         local all_tasks = {}        ---@type {[integer]: Task}
+        local ran_task = false
+
         while #active_tasks > 0 do
             local first_task = active_tasks:pop()
 
@@ -974,6 +976,7 @@ local function do_tasks()
                         end
                     end
                 else
+                    ran_task = true
                     all_tasks[best_task.identifier] = nil
                     if best_position ~= nil then
                         log("info", "selected a task and path to its destination.")
@@ -1008,6 +1011,9 @@ local function do_tasks()
         end
         for identifier, task in pairs(all_tasks) do
             active_tasks:push(task, task.priority)
+        end
+        if not ran_task then
+            coroutine.yield()
         end
     end
 end
