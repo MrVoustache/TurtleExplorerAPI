@@ -10,6 +10,7 @@ end
 local file = fs.open("autorun/TurtleExplorerAPI.lua", "w")
 file.writeLine("shell.setPath(shell.path()..':TurtleExplorerAPI/bin')")
 file.writeLine("package.path = package.path..';TurtleExplorerAPI/lib/?.lua'")
+file.writeLine("package.path = package.path..';TurtleExplorerAPI/tasks/?.lua'")
 file.writeLine("for index, filename in ipairs(fs.list('TurtleExplorerAPI/autocomplete')) do")
 file.writeLine("\tlocal path = shell.resolveProgram(filename)")
 file.writeLine("\tlocal func = dofile('TurtleExplorerAPI/autocomplete/'..filename)")
