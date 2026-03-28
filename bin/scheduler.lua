@@ -1047,52 +1047,56 @@ local function do_tasks()
     end
 end
 
-local functions_to_run = {
-    [do_tasks] = true,
+local is_mandatory = {
     [run_background_threads] = true,
     [answer_requests] = false,
-    [forget_blocks] = false
+    [forget_blocks] = false,
+    [do_tasks] = true
 }
+local functions = {
+    run_background_threads = run_background_threads,
+    answer_requests = answer_requests,
+    forget_blocks = forget_blocks,
+    do_tasks = do_tasks
+}
+local order = {
+    "run_background_threads",
+    "answer_requests",
+    "forget_blocks",
+    "do_tasks"
+}
+local threads = {}
 
-local mandatory_threads = {}        ---@type thread[]
-local secondary_threads = {}        ---@type thread[]
-for func, must_finish in pairs(functions_to_run) do
-    local coro = coroutine.create(func)
-    log("info", "initializing coroutine for "..tostring(func))
+for index, func_name in ipairs(order) do
+    local coro = coroutine.create(functions[func_name])
+    log("info", "initializing coroutine for "..tostring(func_name))
     local ok, err = coroutine.resume(coro)
     if not ok then
-        error("major routine exited before entering the event loop: "..tostring(err))
+        error((is_mandatory[func_name] and "mandatory" or "secondary").." routine exited before entering the event loop: "..tostring(err))
     end
     if coroutine.status(coro) ~= "suspended" then
-        error("major routine exited before entering the event loop without error")
+        error((is_mandatory[func_name] and "mandatory" or "secondary").." routine exited before entering the event loop without error")
     end
-    if must_finish then
-        table.insert(mandatory_threads, coro)
-    else
-        table.insert(secondary_threads, coro)
-    end
+    table.insert(threads, coro)
 end
 
-while #mandatory_threads > 0 do
+local is_mandatory_living = true
+while true do
     local event = {coroutine.yield()}
-    for index, thread in ipairs(mandatory_threads) do
+    for index, thread in ipairs(threads) do
         coroutine.resume(thread, table.unpack(event))
     end
-    for index, thread in ipairs(secondary_threads) do
-        coroutine.resume(thread, table.unpack(event))
-    end
-    for i = #mandatory_threads, 1, -1 do
-        local thread = mandatory_threads[i]
+
+    is_mandatory_living = false
+    for i = #threads, 1, -1 do
+        local thread = threads[i]
         if coroutine.status(thread) ~= "suspended" then
-            log("info", "mandatory coroutine "..tostring(thread).." ended.")
-            table.remove(mandatory_threads, i)
-        end
-    end
-    for i = #secondary_threads, 1, -1 do
-        local thread = secondary_threads[i]
-        if coroutine.status(thread) ~= "suspended" then
-            log("info", "secondary coroutine "..tostring(thread).." ended.")
-            table.remove(secondary_threads, i)
+            log("info", (is_mandatory[func_name] and "mandatory" or "secondary").." coroutine "..tostring(thread).." ended.")
+            table.remove(threads, i)
+        else
+            if is_mandatory[order[i]] then
+                is_mandatory_living = true
+            end
         end
     end
 end
