@@ -143,7 +143,7 @@ function Heap:priority(item)
     end
 end
 
---- Removes the given item with given priority from the heap.
+--- Removes the given item from the heap.
 ---@param item T
 function Heap:remove(item)
 
