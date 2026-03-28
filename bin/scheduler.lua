@@ -459,6 +459,9 @@ local function move_to_LIFE_OR_DEATH(destination, direction)
         for i = 2, #path, 1 do
             local next = path[i]
             local ok1, ok2, err, data
+            if current_task == nil then
+                return false
+            end
             if next == current:above() then
                 ok1, err = turtle.up()
                 if not ok1 then
@@ -512,6 +515,9 @@ local function move_to_URGENT(destination, direction)
         for i = 2, #path, 1 do
             local next = path[i]
             local ok1, ok2, err, data
+            if current_task == nil then
+                return false
+            end
             if next == current:above() then
                 ok1, err = turtle.up()
                 if not ok1 then
@@ -594,6 +600,9 @@ local function move_to_QUICK(destination, direction)
         for i = 2, #path, 1 do
             local next = path[i]
             local ok1, ok2, err, data
+            if current_task == nil then
+                return false
+            end
             if next == current:above() then
                 ok1, err = turtle.up()
                 if not ok1 then
@@ -681,6 +690,9 @@ local function move_to_AROUND(destination, direction)
         for i = 2, #path, 1 do
             local next = path[i]
             local ok1, ok2, err, data
+            if current_task == nil then
+                return false
+            end
             if next == current:above() then
                 ok1, err = turtle.up()
                 if not ok1 then
@@ -770,6 +782,9 @@ local function move_to_NEAR(destination, direction)
         for i = 2, #path, 1 do
             local next = path[i]
             local ok1, ok2, err, data
+            if current_task == nil then
+                return false
+            end
             if next == current:above() then
                 ok1, err = turtle.up()
                 if not ok1 then
@@ -867,6 +882,18 @@ local function answer_requests()
                 if coroutine.status(coro) ~= "dead" then
                     task_threads[task.identifier] = coro
                 end
+            end
+        elseif event[1] == "task_unregister" then
+            task = event[2]
+            if idle_tasks[task.identifier] then
+                log("debug", "deleting idle task: "..tostring(task))
+                idle_tasks[task.identifier] = nil
+            else
+                log("debug", "deleting active task: "..tostring(task))
+                if current_task == task then
+                    current_task = nil
+                end
+                active_tasks:remove(task)
             end
         end
         if map_updated then
@@ -1015,6 +1042,8 @@ local function do_tasks()
         if not ran_task then
             coroutine.yield()
         end
+        current_task = nil
+        current_priority = math.huge
     end
 end
 

@@ -91,6 +91,11 @@ function Task:register()
     os.queueEvent("task_register", self)
 end
 
+--- Unregisters (deletes) the task for the scheduler.
+function Task:unregister()
+    os.queueEvent("task_unregister", self)
+end
+
 --- Called by the scheduler when the map knowledge changes on a given position. This function is only called when a map is or gets linked to the task.
 ---@param position Position? The position on which the map has changed. Is nil when the map is affected to the task.
 function Task:on_map_update(position)
