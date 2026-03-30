@@ -9,9 +9,11 @@ local function complete(shell, arg_index, current_arg, previous_args)
         local names = tracker.get_dict_names()
         local dict = {}
         for _, name in ipairs(names) do
-            dict[name] = name
+            if name:find(current_arg) == 1 then
+                table.insert(dict, name:sub(#current_arg + 1))
+            end
         end
-        return textutils.complete(current_arg, dict)
+        return dict
     end
     return {}
 end
