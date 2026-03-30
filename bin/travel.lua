@@ -1,9 +1,5 @@
 --- A script that makes a turtle move to a desired location.
 
-local maps = require "maps"
-local tracker = require "tracker"
-local go_to = require "go_to"
-
 local args = {...}
 
 local function print_color(message, color, newline)

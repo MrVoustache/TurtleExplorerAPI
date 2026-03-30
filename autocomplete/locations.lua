@@ -1,7 +1,5 @@
 --- Handles the autocompletion of the arguments of the locations script.
  
-local tracker = require "tracker"
-
 
 
 

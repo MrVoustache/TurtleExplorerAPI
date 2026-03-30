@@ -1,6 +1,10 @@
 --- A simple yet very practical priority queue implementation using binary heaps.
 
 local heap = {}
+if _G.heap ~= nil then
+    return
+end
+_G.heap = heap
 
 ---@generic T
 ---@class Heap<T> A binary heap class.

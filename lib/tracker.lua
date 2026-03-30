@@ -1,7 +1,10 @@
 --- This module allows a turtle to move around, all while updating its relative position, as well as to register callbacks in case of moves.
 
-local maps = require "maps"
 local tracker = {}
+if _G.tracker ~= nil then
+    return
+end
+_G.tracker = tracker
 
 
 

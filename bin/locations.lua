@@ -1,8 +1,5 @@
 --- A script add, remove or list named locations in the world.
 
-local maps = require "maps"
-local tracker = require "tracker"
-
 local args = {...}
 
 local function print_color(message, color, newline)

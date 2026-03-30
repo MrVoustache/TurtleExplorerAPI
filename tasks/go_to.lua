@@ -1,9 +1,10 @@
 --- This module defines a simple task that orders the turtle to go to a specific location.
 
-local tracker = require "tracker"
-local tasker = require "tasker"
-local maps   = require "maps"
 local go_to = {}
+if _G.go_to ~= nil then
+    return
+end
+_G.go_to = go_to
 
 ---@class GoToTask: Task A subclass of Task that enables the turtle to travel to a specific location.
 ---@field target_position Position The position that the turtle should reach to complete the task.

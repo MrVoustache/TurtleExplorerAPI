@@ -1,8 +1,10 @@
 --- This module defines tasks that can be accomplished by turtles in different locations of the world, with different priorities.
 
-local maps = require "maps"
-local blocks = require "blocks"
 local tasker = {}
+if _G.tasker ~= nil then
+    return
+end
+_G.tasker = tasker
 
 ---@enum TIMING_COST
 tasker.TIMING_COST = {        --- Defines how urgent the task is and how the turtle may move to the location to accomplish the task.

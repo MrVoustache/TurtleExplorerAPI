@@ -1,9 +1,10 @@
 --- This module defines a subclass of Task that helps the turtle explore its environment.
 
-local tracker = require "tracker"
-local tasker = require "tasker"
-local maps   = require "maps"
 local explorer = {}
+if _G.explorer ~= nil then
+    return
+end
+_G.explorer = explorer
 
 
 

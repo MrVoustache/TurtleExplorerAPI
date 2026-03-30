@@ -2,8 +2,11 @@
 --- 
 --- For direction conventions, the positive x direction is east (direction 0), the positive y direction is up, and the positive z direction is south (direction 1). The negative x direction is west (direction 2), the negative y direction is down, and the negative z direction is north (direction 3).
 
-local heap = require "heap"
 local maps = {}
+if _G.maps ~= nil then
+    return
+end
+_G.maps = maps
 
 ---@enum DIRECTION
 maps.DIRECTION = {          --- The four cardinal directions.

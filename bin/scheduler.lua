@@ -1,10 +1,5 @@
 --- This script runs the explorer scheduler and allows the turtle to perform all the necessary actions.
 
-local blocks = require "blocks"
-local heap = require "heap"
-local maps = require "maps"
-local tasker = require "tasker"
-local tracker = require "tracker"
 if _G.scheduler ~= nil then
     printError("A scheduler is already running.")
     return

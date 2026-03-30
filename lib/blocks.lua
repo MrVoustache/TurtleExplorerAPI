@@ -1,6 +1,10 @@
 --- A module that helps identifying block types.
 
 local blocks = {}
+if _G.blocks ~= nil then
+    return
+end
+_G.blocks = blocks
 local LIQUIDS = {
     ["minecraft:water"] = true,
     ["minecraft:lava"] = true
