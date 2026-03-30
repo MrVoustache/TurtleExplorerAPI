@@ -1,20 +1,17 @@
-if fs.exists("autorun") and not fs.isDir("autorun") then
-    printError("'autorun' exists and is not a folder.")
-    return
+local move_old = false
+if fs.exists("startup") and not fs.isDir("startup") then
+    os.rename("startup", "startup_old")
+    move_old = true
 end
 
-if not fs.exists("autorun") then
-    fs.makeDir("autorun")
+if not fs.exists("startup") then
+    fs.makeDir("startup")
+end
+if move_old then
+    fs.copy("startup_old", "startup/startup")
+    fs.delete("startup_old")
 end
 
-fs.copy("TurtleExplorerAPI/TurtleExplorerAPI.lua", "autorun/TurtleExplorerAPI.lua")
-
-local file = fs.open("startup.lua", "w")
-file.writeLine("if fs.exists('autorun') and fs.isDir('autorun') then")
-file.writeLine("\tfor index, filename in ipairs(fs.list('autorun')) do")
-file.writeLine("\t\tshell.run('autorun/'..filename)")
-file.writeLine("\tend")
-file.writeLine("end")
-file.close()
+fs.copy("TurtleExplorerAPI/TurtleExplorerAPI.lua", "startup/TurtleExplorerAPI.lua")
 
 print("Setup complete. Reboot to get access to TurtleExplorerAPI.")
