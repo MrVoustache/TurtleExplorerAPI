@@ -1,12 +1,12 @@
 --- Handles the autocompletion of the arguments of the locations script.
- 
+
 
 
 
 
 local function complete(shell, arg_index, current_arg, previous_args)
     if arg_index == 1 then
-        return textutils.complete(current_arg, {"list", "ls", "remove", "rm", "delete", "del", "add", "save"})
+        return textutils.complete(current_arg, {list = "list", ls = "ls", remove = "remove", rm = "rm", delete = "delete", del = "del", add = "add", save = "save"})
     else
         local mode = previous_args[1]
         if (mode == "remove" or mode == "rm" or mode == "delete" or mode == "del") and arg_index == 2 then
@@ -17,4 +17,5 @@ local function complete(shell, arg_index, current_arg, previous_args)
     end
 end
 
-return complete
+shell.setCompletionFunction(shell.resolveProgram("locations"), complete)
+print("Set autocompletion for locations to "..tostring(complete))

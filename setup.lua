@@ -7,14 +7,13 @@ if not fs.exists("autorun") then
     fs.makeDir("autorun")
 end
 
-local file = fs.open("autorun/TurtleExplorerAPI.lua", "w")
-file.writeLine("shell.setPath(shell.path()..':TurtleExplorerAPI/bin')")
-file.writeLine("package.path = package.path..';TurtleExplorerAPI/lib/?.lua'")
-file.writeLine("package.path = package.path..';TurtleExplorerAPI/tasks/?.lua'")
-file.writeLine("for index, filename in ipairs(fs.list('TurtleExplorerAPI/autocomplete')) do")
-file.writeLine("\tlocal path = shell.resolveProgram(filename)")
-file.writeLine("\tlocal func = dofile('TurtleExplorerAPI/autocomplete/'..filename)")
-file.writeLine("\tshell.setCompletionFunction(path, func)")
+fs.copy("TurtleExplorerAPI/TurtleExplorerAPI.lua", "autorun/TurtleExplorerAPI.lua")
+
+local file = fs.open("startup.lua", "w")
+file.writeLine("if fs.exists('autorun') and fs.isDir('autorun') then")
+file.writeLine("\tfor index, filename in ipairs(fs.list('autorun')) do")
+file.writeLine("\t\tshell.run('autorun/'..filename)")
+file.writeLine("\tend")
 file.writeLine("end")
 file.close()
 

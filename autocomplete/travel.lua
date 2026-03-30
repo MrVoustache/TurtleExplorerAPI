@@ -6,9 +6,14 @@
 
 local function complete(shell, arg_index, current_arg, previous_args)
     if arg_index == 1 then
-        return textutils.complete(current_arg, tracker.get_dict_names())
+        local names = tracker.get_dict_names()
+        local dict = {}
+        for _, name in ipairs(names) do
+            dict[name] = name
+        end
+        return textutils.complete(current_arg, dict)
     end
     return {}
 end
 
-return complete
+shell.setCompletionFunction(shell.resolveProgram("travel"), complete)
