@@ -40,9 +40,9 @@ end
 local pos, dir = nil, nil
 local current_pos, current_dir = tracker.get_position(), tracker.get_direction()
 if #args == 1 then
-    pos, dir = tracker.get_dict_entry(args[2])
+    pos, dir = tracker.get_dict_entry(args[1])
     if pos == nil then
-        print_color("Unknown location: '"..args[2].."'", colors.orange)
+        print_color("Unknown location: '"..args[1].."'", colors.orange)
     end
 elseif #args == 3 then
     local x, y, z = args[1], args[2], args[3]
