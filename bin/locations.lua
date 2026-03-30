@@ -27,15 +27,15 @@ local function print_usage()
     print_color("Removing an existing location:", colors.yellow)
     print_color("locations remove|rm|delete|del <name>")
     print_color("Adding a new location:", colors.yellow)
-    print_color("locations add|save")
-    print_color("locations add|save <x> <y> <z>")
-    print_color("locations add|save <x> <y> <z> <d>")
+    print_color("locations add|save <name>")
+    print_color("locations add|save <name> <x> <y> <z>")
+    print_color("locations add|save <name> <x> <y> <z> <d>")
     print_color("Any coordinate can be repaced with '~' to specify the current location. Saving the direction is optional.", colors.lightGray)
-    return
 end
 
 if #args == 0 then
     print_usage()
+    return
 end
 
 local mode = args[1]
@@ -44,6 +44,7 @@ if mode == "list" or mode == "ls" then
 
     if #args > 1 then
         print_usage()
+        return
     end
 
     local NAME_COLOR = colors.yellow
@@ -95,6 +96,7 @@ if mode == "list" or mode == "ls" then
 elseif mode == "remove" or mode == "rm" or mode == "delete" or mode == "del" then
     if #args ~= 2 then
         print_usage()
+        return
     end
 
     local name = args[2]
@@ -103,7 +105,7 @@ elseif mode == "remove" or mode == "rm" or mode == "delete" or mode == "del" the
 
 elseif mode == "add" or mode == "save" then
 
-    local pos, dir = nil, nil
+    local pos, dir, name = nil, nil, nil
     local current_position = tracker.get_position()
     local current_direction = tracker.get_direction()
 
@@ -117,6 +119,7 @@ elseif mode == "add" or mode == "save" then
         z = z == "~" and current_position.z or tonumber(z)
         if x == nil or math.floor(x) ~= x or y == nil or math.floor(y) ~= y or z == nil or math.floor(z) ~= z then
             print_usage()
+            return
         end
         pos = maps.Position:new(x, y, z)
     elseif #args == 6 then
@@ -127,15 +130,19 @@ elseif mode == "add" or mode == "save" then
         d = d == "~" and current_direction or tonumber(d)
         if x == nil or math.floor(x) ~= x or y == nil or math.floor(y) ~= y or z == nil or math.floor(z) ~= z or d == nil or math.floor(d) ~= d or d < 0 or d > 3 then
             print_usage()
+            return
         end
         pos = maps.Position:new(x, y, z)
         dir = d
     else
         print_usage()
+        return
     end
-    tracker.set_dict_entry(args[2], pos, dir)
-    print_color("Saved location '"..args[2].."'", colors.yellow)
+    name = args[2]
+    tracker.set_dict_entry(name, pos, dir)
+    print_color("Saved location '"..name.."'", colors.yellow)
 
 else
     print_usage()
+    return
 end

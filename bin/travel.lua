@@ -28,7 +28,6 @@ local function print_usage()
     print_color("travel <x> <y> <z>")
     print_color("travel <x> <y> <z> <d>")
     print_color("Any coordinate can be repaced with '~' to specify the current location. Specifying the direction is optional.", colors.lightGray)
-    return
 end
 
 local function require_scheduler()
@@ -52,6 +51,7 @@ elseif #args == 3 then
     z = z == "~" and current_pos.z or tonumber(z)
     if x == nil or math.floor(x) ~= x or y == nil or math.floor(y) ~= y or z == nil or math.floor(z) ~= z then
         print_usage()
+        return
     end
     pos = maps.Position:new(x, y, z)
 elseif #args == 4 then
@@ -62,11 +62,13 @@ elseif #args == 4 then
     d = d == "~" and current_dir or tonumber(d)
     if x == nil or math.floor(x) ~= x or y == nil or math.floor(y) ~= y or z == nil or math.floor(z) ~= z or d == nil or math.floor(d) ~= d or d < 0 or d > 3 then
         print_usage()
+        return
     end
     pos = maps.Position:new(x, y, z)
     dir = d
 else
     print_usage()
+    return
 end
 
 require_scheduler()
