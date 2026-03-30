@@ -117,6 +117,14 @@ while not done do
         end
         previous_state = state
     end
+    local event = {coroutine.yield()}
+    if event[1] == "terminate" then
+        released = true
+        task:unregister()
+        os.queueEvent("tick")       --- To be sure the scheduler will resume the task to release it.
+        print_color("Terminated.", colors.red)
+        return
+    end
 end
 
 print_color("Destination reached. Press any key to release the turtle.", colors.lime)
