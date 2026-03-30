@@ -32,7 +32,7 @@ local turting_locked = false
 local lock_position = nil           ---@type Position?
 
 local log_file = fs.open(LOG_FILE, "w")
-log_file.write("Started scheduler at "..textutils.formatTime(os.time()))
+log_file.writeLine("Started scheduler at "..textutils.formatTime(os.time()))
 
 
 
@@ -53,31 +53,31 @@ local function log(level, message)
         if LOG_TO_PRINT["debug"] then
             printColor(message, colors.gray)
         end
-        log_file.write("[DEBUG]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.writeLine("[DEBUG]:"..textutils.formatTime(os.time())..":"..message)
         log_file.flush()
     elseif level == "info" then
         if LOG_TO_PRINT["debug"] then
             printColor(message, colors.white)
         end
-        log_file.write("[INFO]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.writeLine("[INFO]:"..textutils.formatTime(os.time())..":"..message)
         log_file.flush()
     elseif level == "warning" then
         if LOG_TO_PRINT["debug"] then
             printColor(message, colors.yellow)
         end
-        log_file.write("[WARNING]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.writeLine("[WARNING]:"..textutils.formatTime(os.time())..":"..message)
         log_file.flush()
     elseif level == "error" then
         if LOG_TO_PRINT["debug"] then
             printColor(message, colors.orange)
         end
-        log_file.write("[ERROR]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.writeLine("[ERROR]:"..textutils.formatTime(os.time())..":"..message)
         log_file.flush()
     elseif level == "critical" then
         if LOG_TO_PRINT["debug"] then
             printColor(message, colors.red)
         end
-        log_file.write("[CRITICAL]:"..textutils.formatTime(os.time())..":"..message)
+        log_file.writeLine("[CRITICAL]:"..textutils.formatTime(os.time())..":"..message)
         log_file.flush()
     else
         error("level should be one of 'debug', 'info', 'warning', 'error' or 'critical', got '"..tostring(level).."'", 2)
@@ -1079,14 +1079,17 @@ local is_mandatory_living = true
 while true do
     local event = {coroutine.yield()}
     for index, thread in ipairs(threads) do
-        coroutine.resume(thread, table.unpack(event))
+        local ok, err = coroutine.resume(thread, table.unpack(event))
+        if not ok then
+            error("error in coroutine "..order[index]..": "..tostring(err))
+        end
     end
 
     is_mandatory_living = false
     for i = #threads, 1, -1 do
         local thread = threads[i]
         if coroutine.status(thread) ~= "suspended" then
-            log("info", (is_mandatory[func_name] and "mandatory" or "secondary").." coroutine "..tostring(thread).." ended.")
+            log("info", (is_mandatory[order[i]] and "mandatory" or "secondary").." coroutine "..order[i].." ended.")
             table.remove(threads, i)
         else
             if is_mandatory[order[i]] then
