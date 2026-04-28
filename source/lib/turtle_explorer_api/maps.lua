@@ -2,11 +2,10 @@
 --- 
 --- For direction conventions, the positive x direction is east (direction 0), the positive y direction is up, and the positive z direction is south (direction 1). The negative x direction is west (direction 2), the negative y direction is down, and the negative z direction is north (direction 3).
 
+local class = require ".lib.class"
+local heap = require "heap"
+
 local maps = {}
-if _G.maps ~= nil then
-    return
-end
-_G.maps = maps
 
 ---@enum DIRECTION
 maps.DIRECTION = {          --- The four cardinal directions.
@@ -24,29 +23,25 @@ maps.DIRECTION = {          --- The four cardinal directions.
 ---@field x number The x coordinate of the position.
 ---@field y number The y coordinate of the position.
 ---@field z number The z coordinate of the position.
-local Position = {}
+local Position = class.classify("Position", {})
 maps.Position = Position
-
-Position.__index = Position
-Position.__name = "Position"
 
 --- Creates a new Position object.
 ---@param x number? The x coordinate of the position.
 ---@param y number? The y coordinate of the position.
 ---@param z number? The z coordinate of the position.
 ---@return Position pos The new Position object.
-function Position:new(x, y, z)
-    local pos = setmetatable({}, Position)
+function Position:__init(x, y, z)
     if x == nil then x = 0 end
     if y == nil then y = 0 end
     if z == nil then z = 0 end
     if type(x) ~= "number" then error("x must be a number, not '" .. type(x) .. "'", 2) end
     if type(y) ~= "number" then error("y must be a number, not '" .. type(y) .. "'", 2) end
     if type(z) ~= "number" then error("z must be a number, not '" .. type(z) .. "'", 2) end
-    pos.x = x
-    pos.y = y
-    pos.z = z
-    return pos
+    self.x = x
+    self.y = y
+    self.z = z
+    return self
 end
 
 --- Returns a string representation of the Position object.
@@ -96,43 +91,43 @@ function Position:to_absolute(origin, east_direction)
     else
         error("invalid direction value", 2)
     end
-    return Position:new(newX, newY, newZ)
+    return Position(newX, newY, newZ)
 end
 
 --- Returns the next position above.
 ---@return Position above The above position.
 function Position:above()
-    return Position:new(self.x, self.y + 1, self.z)
+    return Position(self.x, self.y + 1, self.z)
 end
 
 --- Returns the next position below.
 ---@return Position below The below position.
 function Position:below()
-    return Position:new(self.x, self.y - 1, self.z)
+    return Position(self.x, self.y - 1, self.z)
 end
 
 --- Returns the next eastern position (positive x).
 ---@return Position east The eastern position.
 function Position:east()
-    return Position:new(self.x + 1, self.y, self.z)
+    return Position(self.x + 1, self.y, self.z)
 end
 
 --- Returns the next southern position (positive z).
 ---@return Position south The southern position.
 function Position:south()
-    return Position:new(self.x, self.y, self.z + 1)
+    return Position(self.x, self.y, self.z + 1)
 end
 
 --- Returns the next western position (negative x).
 ---@return Position west The west position.
 function Position:west()
-    return Position:new(self.x - 1, self.y, self.z)
+    return Position(self.x - 1, self.y, self.z)
 end
 
 --- Returns the next northern position (negative x).
 ---@return Position north The north position.
 function Position:north()
-    return Position:new(self.x, self.y, self.z - 1)
+    return Position(self.x, self.y, self.z - 1)
 end
 
 --- Returns the next block in the given cardinal direction.
@@ -159,17 +154,17 @@ function Position:neighbors()
     return function ()
         i = i + 1
         if i == 1 then
-            return Position:new(x + 1, y, z)
+            return Position(x + 1, y, z)
         elseif i == 2 then
-            return Position:new(x - 1, y, z)
+            return Position(x - 1, y, z)
         elseif i == 3 then
-            return Position:new(x, y + 1, z)
+            return Position(x, y + 1, z)
         elseif i == 4 then
-            return Position:new(x, y - 1, z)
+            return Position(x, y - 1, z)
         elseif i == 5 then
-            return Position:new(x, y, z + 1)
+            return Position(x, y, z + 1)
         elseif i == 6 then
-            return Position:new(x, y, z - 1)
+            return Position(x, y, z - 1)
         end
     end
 end
@@ -288,7 +283,7 @@ function maps.get_relative_to_absolute_transform(origin, direction_or_relative_p
         if absolute_position == nil then
             error("absolute_position is required when the second argument is a relative position", 2)
         end
-        direction = maps.get_absolute_direction(direction_or_relative_position, origin, Position:new(), absolute_position)
+        direction = maps.get_absolute_direction(direction_or_relative_position, origin, Position(), absolute_position)
     else
         error("direction_or_relative_position must be either a number or a Position object", 2)
     end
@@ -367,7 +362,7 @@ function maps.bounded_positions(pos1, pos2)
         for x = x1, x2, dx do
             for y = y1, y2, dy do
                 for z = z1, z2, dz do
-                    coroutine.yield(Position:new(x, y, z))
+                    coroutine.yield(Position(x, y, z))
                 end
             end
         end
@@ -390,7 +385,7 @@ function Position:at_range(range)
         for x = self.x - range, self.x + range do
             for y = self.y - range, self.y + range do
                 for z = self.z - range, self.z + range do
-                    coroutine.yield(Position:new(x, y, z))
+                    coroutine.yield(Position(x, y, z))
                 end
             end
         end
@@ -421,11 +416,8 @@ maps.STATUS = {         --- The possibles statuses of blocks at a given location
 ---@field size number The size of the map, which is the number of positions with known status or block type.
 ---@field generate_events boolean If events should be generated in case of map update.
 ---@field change_callback fun(position: Position, old_status: number?, old_block: string?, new_status: number?, new_block: string?)? A function called by set_position and del_position.
-local Map = {}
+local Map = class.classify("Map", {})
 maps.Map = Map
-
-Map.__index = Map
-Map.__name = "Map"
 
 --- Creates a new Map object.
 ---@param change_callback fun(position: Position, old_status: number?, old_block: string?, new_status: number?, new_block: string?)? An optional function that will be called when the map is updated.
@@ -656,7 +648,7 @@ function Map:find_path(start_pos, start_direction, destination_pos, destination_
 
     local start_hash = hash_pair(start_pos, start_direction)
 
-    local to_do_heap = heap.Heap:new(function(h) return h end) ---@type Heap<string> The binary heap for fast queue operations.
+    local to_do_heap = heap.Heap(function(h) return h end) ---@type Heap<string> The binary heap for fast queue operations.
     to_do_heap:push(start_hash, distance_to_destination_heuristic(start_pos))
     local to_do_pos = {[start_hash] = start_pos} ---@type {string: Position} The positions to look at.
     local to_do_dir = {[start_hash] = start_direction} ---@type {string: DIRECTION} The directions to look at.

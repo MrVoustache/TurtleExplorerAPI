@@ -1,10 +1,9 @@
 --- This module defines a simple task that orders the turtle to go to a specific location.
 
+local tasker = require "tasker"
+local maps   = require "maps"
+
 local go_to = {}
-if _G.go_to ~= nil then
-    return
-end
-_G.go_to = go_to
 
 ---@class GoToTask: Task A subclass of Task that enables the turtle to travel to a specific location.
 ---@field target_position Position The position that the turtle should reach to complete the task.
@@ -42,11 +41,13 @@ function GoToTask:new(target_position, target_direction, arrived_callback, unrea
     if unreachable_callback ~= nil and type(unreachable_callback) ~= "function" then
         error("expected function or nil for argument #4, got '"..type(unreachable_callback).."'", 2)
     end
-    tasker.Task.new(self)
+    self = tasker.Task(self)
+    setmetatable(self, GoToTask)
     self.target_position = target_position
     self.target_direction = target_direction
     self.arrived_callback = arrived_callback
     self.unreachable_callback = unreachable_callback
+    return self
 end
 
 --- A simple function that prompts the user once the turtle has reached its destination.
@@ -95,3 +96,9 @@ end
 function GoToTask:positions(current_position, current_direction)
     return {self.target_position}, self.target_direction == nil and {} or {self.target_direction}
 end
+
+
+
+
+
+return go_to

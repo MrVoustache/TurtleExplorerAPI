@@ -1,10 +1,10 @@
 --- This module defines tasks that can be accomplished by turtles in different locations of the world, with different priorities.
 
+local class = require ".lib.class"
+local maps = require "maps"
+local blocks = require "blocks"
+
 local tasker = {}
-if _G.tasker ~= nil then
-    return
-end
-_G.tasker = tasker
 
 ---@enum TIMING_COST
 tasker.TIMING_COST = {        --- Defines how urgent the task is and how the turtle may move to the location to accomplish the task.
@@ -26,24 +26,19 @@ tasker.TIMING_COST = {        --- Defines how urgent the task is and how the tur
 ---@field timing_cost TIMING_COST A value indicating if the turtle has time to perform other tasks along the way when getting to the location of the task. Can be one of tasker.TIMING_COST.URGENT, tasker.TIMING_COST.QUICK, tasker.TIMING_COST.AROUND, tasker.TIMING_COST.NEAR or tasker.TIMING_COST.LIFE_OR_DEATH.
 ---@field priority integer A value used to sort the different tasks. A task with lower priority will be executed before others.
 ---@field path_costs {turning: number, up: number, down: number, forward: number}? A table indicating the costs for building a path to a target destination od the task.
-local Task = {}
-Task.__name = "Task"
-Task.__index = Task
-setmetatable(Task, Task)
+local Task = class.classify("Task", {})
 tasker.Task = Task
 local identifier = 0
 
 --- Creates a new task
-function Task:new()
-    local task = {}
-    setmetatable(task, self or Task)
-    task.check_on_move = false
+function Task:__init()
+    self.check_on_move = false
     identifier = identifier + 1
-    task.identifier = identifier
-    task.enabled = false
-    task.timing_cost = tasker.TIMING_COST.NEAR
-    task.priority = 0
-    return task
+    self.identifier = identifier
+    self.enabled = false
+    self.timing_cost = tasker.TIMING_COST.NEAR
+    self.priority = 0
+    return self
 end
 
 --- Tries to perform the task at the given position. If the position is not right, simply return false. If check_on_move is true, everytime the turtle moves, this function will be called.

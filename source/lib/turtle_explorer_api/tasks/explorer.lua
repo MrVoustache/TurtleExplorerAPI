@@ -1,10 +1,10 @@
 --- This module defines a subclass of Task that helps the turtle explore its environment.
 
+local tasker = require "tasker"
+local maps   = require "maps"
+local tracker= require "tracker"
+
 local explorer = {}
-if _G.explorer ~= nil then
-    return
-end
-_G.explorer = explorer
 
 
 
@@ -24,8 +24,7 @@ explorer.ExplorationTask = ExplorationTask
 
 --- Creates a new exploration task with the given priority.
 ---@param priority number? The priority of exploration. Defaults to 10.
-function ExplorationTask:new(priority)
-    tasker.Task.new(self)
+function ExplorationTask:__init(priority)
     if priority == nil then
         priority = 10
     end
@@ -34,6 +33,7 @@ function ExplorationTask:new(priority)
     end
     self.priority = priority
     self.boundaries = {}
+    return self
 end
 
 
@@ -191,7 +191,7 @@ function ExplorationTask:perform(pos, direction, freedom)
     end
 
     local function check_forward()
-        local forward_status, forward_block = table.unpack(self.active_map[pos:forward(direction)])
+        local forward_status, forward_block = table.unpack(self.active_map[pos:in_direction(direction)])
         if forward_status == nil or (forward_status == maps.STATUS.BARRIER and forward_block == nil) then
             local ok, forward_data = turtle.inspect()
             local new_status, new_block_data = nil, nil
@@ -202,7 +202,7 @@ function ExplorationTask:perform(pos, direction, freedom)
                 new_status = forward_status == maps.STATUS.BARRIER and maps.STATUS.BARRIER or maps.STATUS.EMPTY
                 new_block_data = nil
             end
-            self.active_map[pos:forward(direction)] = {new_status, new_block_data}
+            self.active_map[pos:in_direction(direction)] = {new_status, new_block_data}
         end
     end
     

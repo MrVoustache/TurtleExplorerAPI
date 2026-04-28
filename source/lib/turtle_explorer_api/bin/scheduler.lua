@@ -1,3 +1,8 @@
+local heap = require ".lib.turtle_explorer_api.heap"
+local tracker = require ".lib.turtle_explorer_api.tracker"
+local blocks  = require ".lib.turtle_explorer_api.blocks"
+local maps    = require ".lib.turtle_explorer_api.maps"
+local tasker  = require ".lib.turtle_explorer_api.tasker"
 --- This script runs the explorer scheduler and allows the turtle to perform all the necessary actions.
 
 if _G.scheduler ~= nil then
@@ -18,7 +23,7 @@ local LOG_TO_PRINT = {
 
 FORGET_DELAY = 5.0
 
-local active_tasks = heap.Heap:new(function (task) return tostring(task.identifier) end)        ---@type Heap<Task> The tasks to run.
+local active_tasks = heap.Heap(function (task) return tostring(task.identifier) end)        ---@type Heap<Task> The tasks to run.
 local idle_tasks = {}                                                                           ---@type {integer: Task} The sleeping tasks.
 local task_threads = {}                                                                         ---@type {integer: thread} The background threads of all the tasks.
 local map_updated = false
@@ -261,7 +266,7 @@ local function on_map_update(position, old_status, old_block, new_status, new_bl
     end
 end
 
-local map = maps.Map:new(on_map_update)
+local map = maps.Map(on_map_update)
 if fs.exists(MAP_FILE) then
     local file = fs.open(MAP_FILE, "r")
     local function readline()
@@ -332,21 +337,21 @@ function scheduler.add_barrier_wall(pos1, pos2)
         local x, y1, y2, z1, z2 = pos1.x, math.min(pos1.y, pos2.y), math.max(pos1.y, pos2.y), math.min(pos1.z, pos2.z), math.max(pos1.z, pos2.z)
         for y = y1, y2 do
             for z = z1, z2 do
-                total_added = total_added + scheduler.add_barrier_block(maps.Position:new(x, y, z))
+                total_added = total_added + scheduler.add_barrier_block(maps.Position(x, y, z))
             end
         end
     elseif pos1.y == pos2.y then
         local y, x1, x2, z1, z2 = pos1.y, math.min(pos1.x, pos2.x), math.max(pos1.x, pos2.x), math.min(pos1.z, pos2.z), math.max(pos1.z, pos2.z)
         for x = x1, x2 do
             for z = z1, z2 do
-                total_added = total_added + scheduler.add_barrier_block(maps.Position:new(x, y, z))
+                total_added = total_added + scheduler.add_barrier_block(maps.Position(x, y, z))
             end
         end
     elseif pos1.z == pos2.z then
         local z, x1, x2, y1, y2 = pos1.z, math.min(pos1.x, pos2.x), math.max(pos1.x, pos2.x), math.min(pos1.y, pos2.y), math.max(pos1.y, pos2.y)
         for x = x1, x2 do
             for y = y1, y2 do
-                total_added = total_added + scheduler.add_barrier_block(maps.Position:new(x, y, z))
+                total_added = total_added + scheduler.add_barrier_block(maps.Position(x, y, z))
             end
         end
     end
@@ -365,12 +370,12 @@ function scheduler.add_barrier_box(pos1, pos2)
         error("expected Position for argument #2, got '"..type(pos2).."'", 2)
     end
     local total_added = 0
-    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos1.y, pos1.z), maps.Position:new(pos1.x, pos2.y, pos2.z))
-    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos1.y, pos1.z), maps.Position:new(pos2.x, pos1.y, pos2.z))
-    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos1.y, pos1.z), maps.Position:new(pos2.x, pos2.y, pos1.z))
-    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos2.x, pos1.y, pos1.z), maps.Position:new(pos2.x, pos2.y, pos2.z))
-    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos2.y, pos1.z), maps.Position:new(pos2.x, pos2.y, pos2.z))
-    total_added = total_added + scheduler.add_barrier_wall(maps.Position:new(pos1.x, pos1.y, pos2.z), maps.Position:new(pos2.x, pos2.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position(pos1.x, pos1.y, pos1.z), maps.Position(pos1.x, pos2.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position(pos1.x, pos1.y, pos1.z), maps.Position(pos2.x, pos1.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position(pos1.x, pos1.y, pos1.z), maps.Position(pos2.x, pos2.y, pos1.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position(pos2.x, pos1.y, pos1.z), maps.Position(pos2.x, pos2.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position(pos1.x, pos2.y, pos1.z), maps.Position(pos2.x, pos2.y, pos2.z))
+    total_added = total_added + scheduler.add_barrier_wall(maps.Position(pos1.x, pos1.y, pos2.z), maps.Position(pos2.x, pos2.y, pos2.z))
     return total_added
 end
 

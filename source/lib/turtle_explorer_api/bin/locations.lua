@@ -1,5 +1,8 @@
 --- A script add, remove or list named locations in the world.
 
+local tracker = require ".lib.turtle_explorer_api.tracker"
+local maps    = require ".lib.turtle_explorer_api.maps"
+
 local args = {...}
 
 local function print_color(message, color, newline)
@@ -121,7 +124,7 @@ elseif mode == "add" or mode == "save" then
             print_usage()
             return
         end
-        pos = maps.Position:new(x, y, z)
+        pos = maps.Position(x, y, z)
     elseif #args == 6 then
         local x, y, z, d = args[3], args[4], args[5], args[6]
         x = x == "~" and current_position.x or tonumber(x)
@@ -132,7 +135,7 @@ elseif mode == "add" or mode == "save" then
             print_usage()
             return
         end
-        pos = maps.Position:new(x, y, z)
+        pos = maps.Position(x, y, z)
         dir = d
     else
         print_usage()

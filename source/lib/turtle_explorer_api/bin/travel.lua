@@ -1,5 +1,9 @@
 --- A script that makes a turtle move to a desired location.
 
+local maps = require ".lib.turtle_explorer_api.maps"
+local tracker = require ".lib.turtle_explorer_api.tracker"
+local go_to   = require ".lib.turtle_explorer_api.tasks.go_to"
+
 local args = {...}
 
 local function print_color(message, color, newline)
@@ -53,7 +57,7 @@ elseif #args == 3 then
         print_usage()
         return
     end
-    pos = maps.Position:new(x, y, z)
+    pos = maps.Position(x, y, z)
 elseif #args == 4 then
     local x, y, z, d = args[1], args[2], args[3], args[4]
     x = x == "~" and current_pos.x or tonumber(x)
@@ -64,7 +68,7 @@ elseif #args == 4 then
         print_usage()
         return
     end
-    pos = maps.Position:new(x, y, z)
+    pos = maps.Position(x, y, z)
     dir = d
 else
     print_usage()

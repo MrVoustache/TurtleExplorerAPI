@@ -1,16 +1,14 @@
 --- This module allows a turtle to move around, all while updating its relative position, as well as to register callbacks in case of moves.
 
+local maps = require "maps"
+
 local tracker = {}
-if _G.tracker ~= nil then
-    return
-end
-_G.tracker = tracker
 
 
 
 
 
-local position = maps.Position:new(0, 0, 0)
+local position = maps.Position(0, 0, 0)
 local direction = maps.DIRECTION.EAST
 local POSITION_FILE = ".pos"
 local dictionary = {}       ---@type {[string]: {[1]: Position, [2]: DIRECTION?}}
@@ -38,7 +36,7 @@ local function load_position()
         end
         local remaining = file.readAll()
         assert(remaining == "", "remaining content in position file: '"..remaining.."'")
-        position = maps.Position:new(x, y, z)
+        position = maps.Position(x, y, z)
         direction = d
         safe_loaded = true
         file.close()
@@ -65,12 +63,12 @@ end
 if not safe_loaded then
     local x, y, z = gps.locate()
     if x then
-        local p1 = maps.Position:new(x, y, z)
+        local p1 = maps.Position(x, y, z)
         -- 1. Try moving Forward
         if old_forward() then
             local x2, y2, z2 = gps.locate()
             if x2 then
-                local p2 = maps.Position:new(x2, y2, z2)
+                local p2 = maps.Position(x2, y2, z2)
                 direction = p1:direction_to(p2)
                 position = p2
                 safe_loaded = true
@@ -79,7 +77,7 @@ if not safe_loaded then
         elseif old_back() then
             local x2, y2, z2 = gps.locate()
             if x2 then
-                local p2 = maps.Position:new(x2, y2, z2)
+                local p2 = maps.Position(x2, y2, z2)
                 -- If we moved back, the direction we are FACING is p2 -> p1
                 direction = p2:direction_to(p1)
                 position = p2
@@ -90,7 +88,7 @@ if not safe_loaded then
             if old_forward() then
                 local x2, y2, z2 = gps.locate()
                 if x2 then
-                    local p2 = maps.Position:new(x2, y2, z2)
+                    local p2 = maps.Position(x2, y2, z2)
                     direction = p1:direction_to(p2)
                     position = p2
                     safe_loaded = true
@@ -98,7 +96,7 @@ if not safe_loaded then
             elseif old_back() then
                 local x2, y2, z2 = gps.locate()
                 if x2 then
-                    local p2 = maps.Position:new(x2, y2, z2)
+                    local p2 = maps.Position(x2, y2, z2)
                     direction = p2:direction_to(p1)
                     position = p2
                     safe_loaded = true

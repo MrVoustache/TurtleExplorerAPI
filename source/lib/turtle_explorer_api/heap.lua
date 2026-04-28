@@ -1,10 +1,8 @@
 --- A simple yet very practical priority queue implementation using binary heaps.
 
+local class = require ".lib.class"
+
 local heap = {}
-if _G.heap ~= nil then
-    return
-end
-_G.heap = heap
 
 ---@generic T
 ---@class Heap<T> A binary heap class.
@@ -16,18 +14,14 @@ _G.heap = heap
 ---@field locked boolean
 ---@field postponed {method: string, arguments:any[]}[]
 local Heap = {}
-heap.Heap = Heap
-Heap.__index = Heap
-Heap.__name = "Heap"
+heap.Heap = class.classify("Heap", {})
 
 --- Creates a new Binary Heap.
 ---@param hash fun(item: T): string
-function Heap:new(hash)
+function Heap:__init(hash)
     if type(hash) ~= "function" then
         error("expected function for hash, got '"..type(hash).."'", 2)
     end
-    self = rawequal(self, Heap) and {} or self
-    setmetatable(self, self or Heap)
     self.hash = hash
     self.data = {}
     self.heap = {}
@@ -35,7 +29,6 @@ function Heap:new(hash)
     self.indices = {}
     self.locked = false
     self.postponed = {}
-    return self
 end
 
 function Heap:__len()
@@ -284,6 +277,8 @@ function Heap:iter(max_priority)
         end
     end
 end
+
+class.classify("Heap", Heap)
 
 
 
