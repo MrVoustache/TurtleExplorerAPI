@@ -1,6 +1,6 @@
 from pathlib import Path
 
-URL_TEMPLATE = "https://raw.githubusercontent.com/MrVoustache/LuaPyOOP/refs/heads/main/source/{src_path}"
+URL_TEMPLATE = "https://github.com/MrVoustache/TurtleExplorerAPI/raw/refs/heads/main/source/{src_path}"
 DOWNLOAD_COMMAND = "shell.run('wget {URL} /lib/{src_path}')"
 MKDIR_COMMAND = "fs.makeDir('/lib/{src_path}')"
 
