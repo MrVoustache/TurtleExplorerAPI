@@ -1,15 +1,15 @@
 from pathlib import Path
 
 URL_TEMPLATE = "https://github.com/MrVoustache/TurtleExplorerAPI/raw/refs/heads/main/source/{src_path}"
-DOWNLOAD_COMMAND = "shell.run('wget {URL} /lib/{src_path}')"
-MKDIR_COMMAND = "fs.makeDir('/lib/{src_path}')"
+DOWNLOAD_COMMAND = "shell.run('wget {URL} /{src_path}')"
+MKDIR_COMMAND = "fs.makeDir('/{src_path}')"
 
 
 
 
 
 SRC_DIR = Path(__file__).parent / "source"
-lines : list[str] = ["fs.makeDir('/lib')"]
+lines : list[str] = []
 
 def include_dir(dir : Path):
     for file in dir.iterdir():
