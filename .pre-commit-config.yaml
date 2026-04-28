@@ -3,6 +3,6 @@ repos:
   hooks:
   - id: create-install-script
     name: Generate the Lua install script
-    entry: python build_installer.py
+    entry: .venv/Scripts/python build_installer.py
     language: system
     types: [python]
