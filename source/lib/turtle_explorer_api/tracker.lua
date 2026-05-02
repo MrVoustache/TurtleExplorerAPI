@@ -1,6 +1,6 @@
 --- This module allows a turtle to move around, all while updating its relative position, as well as to register callbacks in case of moves.
 
-local maps = require "maps"
+local maps = import "turtle_explorer_api.maps"
 
 local tracker = {}
 
@@ -11,7 +11,7 @@ local tracker = {}
 local position = maps.Position(0, 0, 0)
 local direction = maps.DIRECTION.EAST
 local POSITION_FILE = ".pos"
-local dictionary = {}       ---@type {[string]: {[1]: Position, [2]: DIRECTION?}}
+local dictionary = {}       ---@type {[string]: {[1]: number, [2]: number, [3]: number, [4]: number?}}
 local DICTIONARY_FILE = ".pos_dict"
 local position_changed = false
 local safe_loaded = false
@@ -62,44 +62,60 @@ end
 
 if not safe_loaded then
     local x, y, z = gps.locate()
-    if x then
+    if x ~= nil then
         local p1 = maps.Position(x, y, z)
         -- 1. Try moving Forward
         if old_forward() then
             local x2, y2, z2 = gps.locate()
-            if x2 then
+            if x2 ~= nil then
                 local p2 = maps.Position(x2, y2, z2)
                 direction = p1:direction_to(p2)
                 position = p2
                 safe_loaded = true
             end
+            if old_back() then
+                position = p1
+            end
         -- 2. Try moving Back
         elseif old_back() then
             local x2, y2, z2 = gps.locate()
-            if x2 then
+            if x2 ~= nil then
                 local p2 = maps.Position(x2, y2, z2)
                 -- If we moved back, the direction we are FACING is p2 -> p1
                 direction = p2:direction_to(p1)
                 position = p2
                 safe_loaded = true
             end
+            if old_forward() then
+                position = p1
+            end
         else
             old_turn_left()
             if old_forward() then
                 local x2, y2, z2 = gps.locate()
-                if x2 then
+                if x2 ~= nil then
                     local p2 = maps.Position(x2, y2, z2)
                     direction = p1:direction_to(p2)
                     position = p2
                     safe_loaded = true
                 end
+                if old_back() then
+                    position = p1
+                    old_turn_right()
+                    direction = (direction + 1) % 4
+                end
             elseif old_back() then
                 local x2, y2, z2 = gps.locate()
-                if x2 then
+                if x2 ~= nil then
                     local p2 = maps.Position(x2, y2, z2)
                     direction = p2:direction_to(p1)
                     position = p2
                     safe_loaded = true
+                end
+                if old_forward() then
+                    position = p1
+                    old_turn_right()
+                    direction = (direction + 1) % 4
                 end
             end
         end
@@ -130,16 +146,13 @@ local function load_dictionary()
         for k2, v2 in pairs(v) do
             n = n + 1
         end
-        if n < 1 or n > 2 then
-            error("a dictionary entry did not contain one or two elements, but "..n, 1)
+        if n < 3 or n > 4 then
+            error("a dictionary entry did not contain three or four elements, but "..n, 1)
         end
-        if v[1] == nil or type(v[1]) ~= "table" or getmetatable(v[1]) ~= maps.Position then
-            error("first element of entry is not a Position object, but a '"..type(v[1]).."'", 1)
+        if type(v[1]) ~= "number" or type(v[2]) ~= "number" or type(v[3]) ~= "number" then
+            error("elements one to three were not all numbers.", 1)
         end
-        if n == 2 and v[2] ~= nil then
-            error("a dictionary value was not an array", 1)
-        end
-        if v[2] ~= nil and (type(v[2]) ~= "number" or v[2] < 0 or v[2] > 3 or v[2] ~= math.floor(v[2])) then
+        if v[4] ~= nil and (type(v[4]) ~= "number" or v[4] < 0 or v[4] > 3 or v[4] ~= math.floor(v[4])) then
             error("second element of entry is not a DIRECTION", 1)
         end
     end
@@ -250,7 +263,7 @@ end
 --- Returns the current known position of the turtle
 ---@return Position current The current position
 function tracker.get_position()
-    return position:new(position.x, position.y, position.z)
+    return maps.Position(position.x, position.y, position.z)
 end
 
 --- Returns the current known direction of the turtle
@@ -279,7 +292,7 @@ function tracker.get_dict_entry(name)
     end
     local entry = dictionary[name]
     if entry ~= nil then
-        return dictionary[name][1], dictionary[name][2]
+        return maps.Position(dictionary[name][1], dictionary[name][2], dictionary[name][3]), dictionary[name][4]
     end
 end
 
@@ -306,7 +319,7 @@ function tracker.set_dict_entry(name, position, direction)
     if position == nil then
         dictionary[name] = nil
     else
-        dictionary[name] = {position, direction}
+        dictionary[name] = {position.x, position.y, position.z, direction}
     end
     save_dictionary()
 end

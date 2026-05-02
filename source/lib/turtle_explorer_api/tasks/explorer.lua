@@ -1,8 +1,9 @@
 --- This module defines a subclass of Task that helps the turtle explore its environment.
 
-local tasker = require "tasker"
-local maps   = require "maps"
-local tracker= require "tracker"
+local class = import "class"
+local tasker = import "turtle_explorer_api.tasker"
+local maps   = import "turtle_explorer_api.maps"
+local tracker= import "turtle_explorer_api.tracker"
 
 local explorer = {}
 
@@ -12,10 +13,7 @@ local explorer = {}
 
 ---@class ExplorationTask: Task A subclass of Task that enables the turtle to explore its environment if possible. Should be run with low priority (10 by default).
 ---@field boundaries {[string]: Position} The positions that are in the borders of the map.
-local ExplorationTask = {}
-ExplorationTask.__name = "ExplorationTask"
-ExplorationTask.__index = ExplorationTask
-setmetatable(ExplorationTask, {__index = tasker.Task})
+local ExplorationTask = class.classify("Task", {}, {tasker.Task})
 explorer.ExplorationTask = ExplorationTask
 
 
@@ -25,6 +23,7 @@ explorer.ExplorationTask = ExplorationTask
 --- Creates a new exploration task with the given priority.
 ---@param priority number? The priority of exploration. Defaults to 10.
 function ExplorationTask:__init(priority)
+    tasker.Task.__init(self)
     if priority == nil then
         priority = 10
     end

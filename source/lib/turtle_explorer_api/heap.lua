@@ -1,6 +1,6 @@
 --- A simple yet very practical priority queue implementation using binary heaps.
 
-local class = require ".lib.class"
+local class = import "class"
 
 local heap = {}
 
@@ -13,12 +13,13 @@ local heap = {}
 ---@field indices {string: number}
 ---@field locked boolean
 ---@field postponed {method: string, arguments:any[]}[]
-local Heap = {}
-heap.Heap = class.classify("Heap", {})
+local Heap = class.classify("Heap", {})
+heap.Heap = Heap
 
 --- Creates a new Binary Heap.
 ---@param hash fun(item: T): string
 function Heap:__init(hash)
+    Object.__init(self)
     if type(hash) ~= "function" then
         error("expected function for hash, got '"..type(hash).."'", 2)
     end
@@ -264,7 +265,7 @@ function Heap:iter(max_priority)
             if #to_do == 0 then
                 return
             end
-            local index = to_do.pop()
+            local index = table.remove(to_do)
             local h = self.heap[index]
             if h ~= nil then
                 local priority = self.priorities[h]
@@ -277,8 +278,6 @@ function Heap:iter(max_priority)
         end
     end
 end
-
-class.classify("Heap", Heap)
 
 
 

@@ -1,5 +1,7 @@
 --- Handles the autocompletion of the arguments of the locations script.
 
+local tracker = import "turtle_explorer_api.tracker"
+
 
 
 

@@ -1,4 +1,6 @@
 --- Handles the autocompletion of the arguments of the travel script.
+
+local tracker = import "turtle_explorer_api.tracker"
  
 
 

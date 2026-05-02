@@ -1,8 +1,8 @@
 --- A script that makes a turtle move to a desired location.
 
-local maps = require ".lib.turtle_explorer_api.maps"
-local tracker = require ".lib.turtle_explorer_api.tracker"
-local go_to   = require ".lib.turtle_explorer_api.tasks.go_to"
+local maps = import "turtle_explorer_api.maps"
+local tracker = import "turtle_explorer_api.tracker"
+local go_to   = import "turtle_explorer_api.tasks.go_to"
 
 local args = {...}
 
@@ -92,13 +92,15 @@ local function give_up()
     os.queueEvent("tick")       --- To be sure this script will resume to handle the unreachable state.
 end
 
-local task = go_to.GoToTask:new(pos, dir, signal_and_wait)
+local task = go_to.GoToTask(pos, dir, signal_and_wait, give_up)
 
 task:register()
 task:enable()
 
-local previous_state = nil
+local previous_state = "waiting"
 local state = nil
+local has_printed = false
+local timer = os.startTimer(2)
 
 while not done do
     if unreachable then
@@ -116,8 +118,10 @@ while not done do
     if state ~= previous_state then
         if state == "moving" then
             print_color("Moving to destination...", colors.lime)
+            has_printed = true
         elseif state == "waiting" then
             print_color("Waiting for other tasks to finish...", colors.yellow)
+            has_printed = true
         end
         previous_state = state
     end
@@ -128,6 +132,13 @@ while not done do
         os.queueEvent("tick")       --- To be sure the scheduler will resume the task to release it.
         print_color("Terminated.", colors.red)
         return
+    elseif event[1] == "timer" and event[2] == timer and not has_printed then
+        has_printed = true
+        if state == "moving" then
+            print_color("Moving to destination...", colors.lime)
+        elseif state == "waiting" then
+            print_color("Waiting for other tasks to finish...", colors.yellow)
+        end
     end
 end
 

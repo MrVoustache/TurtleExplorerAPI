@@ -1,7 +1,8 @@
 --- This module defines a simple task that orders the turtle to go to a specific location.
 
-local tasker = require "tasker"
-local maps   = require "maps"
+local class = import "class"
+local tasker = import "turtle_explorer_api.tasker"
+local maps   = import "turtle_explorer_api.maps"
 
 local go_to = {}
 
@@ -10,10 +11,7 @@ local go_to = {}
 ---@field target_direction DIRECTION? The direction to face when arriving to the target position.
 ---@field arrived_callback fun()? A function to call once the turtle reaches the destination of the task.
 ---@field unreachable_callback fun()? A function to call if the scheduler cannot find a path to the destination.
-local GoToTask = {}
-GoToTask.__name = "GoToTask"
-GoToTask.__index = GoToTask
-setmetatable(GoToTask, {__index = tasker.Task})
+local GoToTask = class.classify("GoToTask", {}, {tasker.Task})
 go_to.GoToTask = GoToTask
 
 
@@ -25,7 +23,8 @@ go_to.GoToTask = GoToTask
 ---@param target_direction DIRECTION? An optional direction to face when arriving at position.
 ---@param arrived_callback fun()? A function to call when the turtle reaches its destination. Can be nil.
 ---@param unreachable_callback fun()? A function to call if the scheduler cannot find a path to the destination. Can be nil.
-function GoToTask:new(target_position, target_direction, arrived_callback, unreachable_callback)
+function GoToTask:__init(target_position, target_direction, arrived_callback, unreachable_callback)
+    tasker.Task.__init(self)
     if type(target_position) ~= "table" or getmetatable(target_position) ~= maps.Position then
         error("expected Position for argument #1, got '"..type(target_position).."'", 2)
     end
@@ -41,8 +40,7 @@ function GoToTask:new(target_position, target_direction, arrived_callback, unrea
     if unreachable_callback ~= nil and type(unreachable_callback) ~= "function" then
         error("expected function or nil for argument #4, got '"..type(unreachable_callback).."'", 2)
     end
-    self = tasker.Task(self)
-    setmetatable(self, GoToTask)
+    self.timing_cost = tasker.TIMING_COST.LIFE_OR_DEATH
     self.target_position = target_position
     self.target_direction = target_direction
     self.arrived_callback = arrived_callback

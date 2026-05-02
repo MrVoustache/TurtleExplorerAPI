@@ -1,7 +1,7 @@
 --- A script add, remove or list named locations in the world.
 
-local tracker = require ".lib.turtle_explorer_api.tracker"
-local maps    = require ".lib.turtle_explorer_api.maps"
+local tracker = import "turtle_explorer_api.tracker"
+local maps    = import "turtle_explorer_api.maps"
 
 local args = {...}
 

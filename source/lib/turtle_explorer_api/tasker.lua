@@ -1,8 +1,8 @@
 --- This module defines tasks that can be accomplished by turtles in different locations of the world, with different priorities.
 
-local class = require ".lib.class"
-local maps = require "maps"
-local blocks = require "blocks"
+local class = import "class"
+local maps = import "turtle_explorer_api.maps"
+local blocks = import "turtle_explorer_api.blocks"
 
 local tasker = {}
 
@@ -64,14 +64,22 @@ function Task:positions(current_position, current_direction)
     error("subclasses of task must override this method", 2)
 end
 
+tasker.event_queue = {}     ---@type {[1]: "task_disabled"|"task_enabled"|"task_priority"|"task_register"|"task_unregister", [2]:Task, [3]: integer?}
+
 --- Disables the task. It is removed from the scheduler's queue and put in its idle list.
 function Task:disable()
-    os.queueEvent("task_disabled", self)
+    if #tasker.event_queue == 0 then
+        os.queueEvent("task_update")
+    end
+    table.insert(tasker.event_queue, {"task_disabled", self})
 end
 
 --- Enables the task. It will be moved from the scheduler's idle list to its queue.
 function Task:enable()
-    os.queueEvent("task_enabled", self)
+    if #tasker.event_queue == 0 then
+        os.queueEvent("task_update")
+    end
+    table.insert(tasker.event_queue, {"task_enabled", self})
 end
 
 --- Changes a tasks's priority.
@@ -80,17 +88,26 @@ function Task:change_priority(new_priority)
     if type(new_priority) ~= "number" then
         error("expected number, got '"..type(new_priority).."'", 2)
     end
-    os.queueEvent("task_priority", self, new_priority)
+    if #tasker.event_queue == 0 then
+        os.queueEvent("task_update")
+    end
+    table.insert(tasker.event_queue, {"task_priority", self, new_priority})
 end
 
 --- Registers the task to be run by the scheduler. It is disabled at first.
 function Task:register()
-    os.queueEvent("task_register", self)
+    if #tasker.event_queue == 0 then
+        os.queueEvent("task_update")
+    end
+    table.insert(tasker.event_queue, {"task_register", self})
 end
 
 --- Unregisters (deletes) the task for the scheduler.
 function Task:unregister()
-    os.queueEvent("task_unregister", self)
+    if #tasker.event_queue == 0 then
+        os.queueEvent("task_update")
+    end
+    table.insert(tasker.event_queue, {"task_unregister", self})
 end
 
 --- Called by the scheduler when the map knowledge changes on a given position. This function is only called when a map is or gets linked to the task.

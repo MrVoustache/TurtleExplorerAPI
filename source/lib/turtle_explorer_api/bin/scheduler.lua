@@ -1,8 +1,9 @@
-local heap = require ".lib.turtle_explorer_api.heap"
-local tracker = require ".lib.turtle_explorer_api.tracker"
-local blocks  = require ".lib.turtle_explorer_api.blocks"
-local maps    = require ".lib.turtle_explorer_api.maps"
-local tasker  = require ".lib.turtle_explorer_api.tasker"
+local class = import "class"
+local heap = import "turtle_explorer_api.heap"
+local tracker = import "turtle_explorer_api.tracker"
+local blocks  = import "turtle_explorer_api.blocks"
+local maps    = import "turtle_explorer_api.maps"
+local tasker  = import "turtle_explorer_api.tasker"
 --- This script runs the explorer scheduler and allows the turtle to perform all the necessary actions.
 
 if _G.scheduler ~= nil then
@@ -33,7 +34,7 @@ local current_task = nil            ---@type Task?
 local blocks_to_forget = {}     ---@type {number: Position} Timer indentifiers corresponding to blocks to forget.
 
 local moving_locked = false
-local turting_locked = false
+local turning_locked = false
 local lock_position = nil           ---@type Position?
 
 local log_file = fs.open(LOG_FILE, "w")
@@ -162,94 +163,6 @@ end
 
 
 
-local old_forward = turtle.forward
-function turtle.forward()
-    if moving_locked then
-        return false, "movement is locked for now"
-    end
-    if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():in_direction(tracker.get_direction())) > 2 then
-        return false, "this would get the turtle too far from its path"
-    end
-    local ok, err = old_forward()
-    if ok then
-        signal_move()
-    end
-    return ok, err
-end
-
-local old_back = turtle.back
-function turtle.back()
-    if moving_locked then
-        return false, "movement is locked for now"
-    end
-    if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():in_direction(-tracker.get_direction() % 4)) > 2 then
-        return false, "this would get the turtle too far from its path"
-    end
-    local ok, err = old_back()
-    if ok then
-        signal_move()
-    end
-    return ok, err
-end
-
-local old_up = turtle.up
-function turtle.up()
-    if moving_locked then
-        return false, "movement is locked for now"
-    end
-    if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():above()) > 2 then
-        return false, "this would get the turtle too far from its path"
-    end
-    local ok, err = old_up()
-    if ok then
-        signal_move()
-    end
-    return ok, err
-end
-
-local old_down = turtle.down
-function turtle.down()
-    if moving_locked then
-        return false, "movement is locked for now"
-    end
-    if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():below()) > 2 then
-        return false, "this would get the turtle too far from its path"
-    end
-    local ok, err = old_down()
-    if ok then
-        signal_move()
-    end
-    return ok, err
-end
-
-local old_turn_left = turtle.turnLeft
-function turtle.turnLeft()
-    if turting_locked then
-        return false, "turning is locked for now"
-    end
-    local ok, err = old_turn_left()
-    if ok then
-        signal_move()
-    end
-    return ok, err
-end
-
-local old_turn_right = turtle.turnRight
-function turtle.turnRight()
-    if turting_locked then
-        return false, "turning is locked for now"
-    end
-    local ok, err = old_turn_right()
-    if ok then
-        signal_move()
-    end
-    return ok, err
-end
-
-
-
-
-
 --- Marks a position as empty after a certain amount of time.
 ---@param pos Position The position to mark empty.
 local function forget_block(pos)
@@ -262,40 +175,24 @@ local function on_map_update(position, old_status, old_block, new_status, new_bl
         forget_block(position)
     else
         log("debug", "Map updated.")
-        map_updated = true
     end
 end
 
 local map = maps.Map(on_map_update)
-if fs.exists(MAP_FILE) then
-    local file = fs.open(MAP_FILE, "r")
-    local function readline()
-        local line = file.readLine()
-        if line then
-            return line.."\n"
+local close_map = nil
+--- Function that loads the map (may take some time) and sets the close_map function.
+local function handle_map()
+    log("debug", "Starting map file synchrinization.")
+    close_map = map:file_sync(MAP_FILE, function (new_map)
+        if new_map then
+            log("info", "Finished initializing new map.")
+        else
+            log("info", "Finished loading existing map.")
         end
-        return ""
+    end)
+    while true do
+        coroutine.yield()
     end
-    local ok, err = pcall(maps.Map.load, map, readline)
-    file.close()
-    if not ok then
-        log("warning", "Could load map file: "..err)
-    else
-        for pos, data in pairs(map) do
-            if data[2] ~= nil and blocks.is_temporary(data[2]) then
-                forget_block(pos)
-            end
-        end
-    end
-    if map == nil then
-        error("could not load map for an unknown reason", 2)
-    end
-end
-
-local function save_map()
-    local file = fs.open(MAP_FILE, "w")
-    map:save(file.write)
-    file.close()
 end
 
 
@@ -379,6 +276,10 @@ function scheduler.add_barrier_box(pos1, pos2)
     return total_added
 end
 
+function scheduler.get_map()
+    return map
+end
+
 
 
 
@@ -402,16 +303,15 @@ end
 ---@param pos Position
 ---@param data {["name"]: string}?
 local function update_map_knowledge(pos, data)
-    local old_status, old_block = table.unpack(map[pos])
+    local old_status, old_block = map.get_position(pos)
     local new_status, new_block = nil, nil
     if data ~= nil then
-
         new_status, new_block = maps.STATUS.SOLID, data["name"]
     else
         new_status, new_block = maps.STATUS.EMPTY, nil
     end
     if new_status ~= old_status or new_block ~= old_block then
-        map[pos] = {new_status, new_block}
+        map.set_position(pos, new_status, new_block)
         signal_map_update(pos)
     end
 end
@@ -424,6 +324,137 @@ local function forget_blocks()
             update_map_knowledge(pos, {})
         end
     end
+end
+
+
+
+
+
+local old_inspect = turtle.inspect
+function turtle.inspect()
+    local ok, data = old_inspect()
+    update_map_knowledge(tracker.get_position().in_direction((tracker.get_direction() + 2) % 4), ok and data or nil)
+    return ok, data
+end
+
+local old_inspect_up = turtle.inspectUp
+function turtle.inspectUp()
+    local ok, data = old_inspect_up()
+    update_map_knowledge(tracker.get_position().above(), ok and data or nil)
+    return ok, data
+end
+
+local old_inspect_down = turtle.inspectDown
+function turtle.inspectDown()
+    local ok, data = old_inspect_down()
+    update_map_knowledge(tracker.get_position().below(), ok and data or nil)
+    return ok, data
+end
+
+
+
+local old_forward = turtle.forward
+function turtle.forward()
+    if moving_locked then
+        return false, "movement is locked for now"
+    end
+    if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():in_direction(tracker.get_direction())) > 2 then
+        return false, "this would get the turtle too far from its path"
+    end
+    local ok, err = old_forward()
+    if ok then
+        signal_move()
+        local pos = tracker.get_position()
+        local info = map[pos]
+        if info == nil or (info[1] ~= maps.STATUS.LIQUID and info[1] ~= maps.STATUS.EMPTY) then
+            update_map_knowledge(pos, nil)
+        end
+    end
+    return ok, err
+end
+
+local old_back = turtle.back
+function turtle.back()
+    if moving_locked then
+        return false, "movement is locked for now"
+    end
+    if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():in_direction(-tracker.get_direction() % 4)) > 2 then
+        return false, "this would get the turtle too far from its path"
+    end
+    local ok, err = old_back()
+    if ok then
+        signal_move()
+        local pos = tracker.get_position()
+        local info = map[pos]
+        if info ~= nil and info[1] ~= maps.STATUS.LIQUID and info[1] ~= maps.STATUS.EMPTY then
+            update_map_knowledge(pos, nil)
+        end
+    end
+    return ok, err
+end
+
+local old_up = turtle.up
+function turtle.up()
+    if moving_locked then
+        return false, "movement is locked for now"
+    end
+    if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():above()) > 2 then
+        return false, "this would get the turtle too far from its path"
+    end
+    local ok, err = old_up()
+    if ok then
+        signal_move()
+        local pos = tracker.get_position()
+        local info = map[pos]
+        if info ~= nil and info[1] ~= maps.STATUS.LIQUID and info[1] ~= maps.STATUS.EMPTY then
+            update_map_knowledge(pos, nil)
+        end
+    end
+    return ok, err
+end
+
+local old_down = turtle.down
+function turtle.down()
+    if moving_locked then
+        return false, "movement is locked for now"
+    end
+    if lock_position ~= nil and lock_position:manhattan_distance_to(tracker.get_position():below()) > 2 then
+        return false, "this would get the turtle too far from its path"
+    end
+    local ok, err = old_down()
+    if ok then
+        signal_move()
+        local pos = tracker.get_position()
+        local info = map[pos]
+        if info ~= nil and info[1] ~= maps.STATUS.LIQUID and info[1] ~= maps.STATUS.EMPTY then
+            update_map_knowledge(pos, nil)
+        end
+    end
+    return ok, err
+end
+
+local old_turn_left = turtle.turnLeft
+function turtle.turnLeft()
+    if turning_locked then
+        return false, "turning is locked for now"
+    end
+    local ok, err = old_turn_left()
+    if ok then
+        signal_move()
+    end
+    return ok, err
+end
+
+local old_turn_right = turtle.turnRight
+function turtle.turnRight()
+    if turning_locked then
+        return false, "turning is locked for now"
+    end
+    local ok, err = old_turn_right()
+    if ok then
+        signal_move()
+    end
+    return ok, err
 end
 
 
@@ -450,7 +481,7 @@ end
 ---@param direction number? The eventual direction in which to arrive at the direction.
 ---@return boolean success If the turtle succesfully reached the destination.
 local function move_to_LIFE_OR_DEATH(destination, direction)
-    while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
+    while tracker.get_position() ~= destination or tracker.get_direction() ~= direction do
         local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_life_or_death)
         if path == nil then
             return false
@@ -492,6 +523,8 @@ local function move_to_LIFE_OR_DEATH(destination, direction)
                     end
                 end
                 break
+            else
+                current = next
             end
         end
         if tracker.get_position() == destination and direction ~= nil then
@@ -506,7 +539,7 @@ end
 ---@param direction number? The eventual direction in which to arrive at the direction.
 ---@return boolean success If the turtle succesfully reached the destination.
 local function move_to_URGENT(destination, direction)
-    while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
+    while tracker.get_position() ~= destination or tracker.get_direction() ~= direction do
         local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_safe)
         if path == nil then
             return false
@@ -570,10 +603,10 @@ local function move_to_QUICK(destination, direction)
             return
         end
         moving_locked = true
-        turting_locked = true
+        turning_locked = true
         local ok, err_or_task_finished = pcall(task.perform, task, tracker.get_position(), tracker.get_direction(), tasker.TIMING_COST.QUICK)
         moving_locked = false
-        turting_locked = false
+        turning_locked = false
         if not ok then
             log("error", "sub-task failed: "..err_or_task_finished)
             active_tasks:remove(task)
@@ -585,7 +618,7 @@ local function move_to_QUICK(destination, direction)
         end
     end
 
-    while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
+    while tracker.get_position() ~= destination or tracker.get_direction() ~= direction do
         local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_safe)
         if path == nil then
             return false
@@ -675,7 +708,7 @@ local function move_to_AROUND(destination, direction)
         end
     end
 
-    while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
+    while tracker.get_position() ~= destination or tracker.get_direction() ~= direction do
         local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_safe)
         if path == nil then
             return false
@@ -766,7 +799,7 @@ local function move_to_NEAR(destination, direction)
         end
     end
 
-    while tracker.get_position() ~= destination and (direction == nil or tracker.get_direction() == direction) do
+    while tracker.get_position() ~= destination or tracker.get_direction() ~= direction do
         local path = map:find_path(tracker.get_position(), tracker.get_direction(), destination, direction, tasker.walkable_safe)
         if path == nil then
             return false
@@ -838,81 +871,75 @@ end
 
 local function answer_requests()
     local event
-    local task
     while true do
         event = {coroutine.yield()}
-        if event[1] == "task_disabled" then
-            task = event[2]
-            if active_tasks:priority(task) ~= nil then
-                log("debug", "disabling task: "..tostring(task))
-                active_tasks:remove(task)
-            end
-            idle_tasks[task.identifier] = task
-            task.enabled = false
-        elseif event[1] == "task_enabled" then
-            task = event[2]
-            if idle_tasks[task.identifier] ~= nil then
-                log("debug", "enabling task: "..tostring(task))
-                idle_tasks[task.identifier] = nil
-            end
-            active_tasks:push(task, task.priority)
-            task.enabled = true
-        elseif event[1] == "task_priority" then
-            task = event[2]
-            task.priority = event[3]
-            if active_tasks:priority(task) ~= nil then
-                log("debug", "changed task priority to "..task.priority..": "..tostring(task))
-                active_tasks:push(task, task.priority)
-            end
-        elseif event[1] == "task_register" then
-            task = event[2]
-            task.active_map = map
-            idle_tasks[task.identifier] = task
-            log("debug", "registering new task: "..tostring(task))
-            local ok, err = pcall(task.on_map_update, task)
-            if not ok then
-                log("error", "Task's 'on_map_update' method failed: "..err)
-            end
-            if type(task.background_handler) == "function" then
-                local coro = coroutine.create(task.background_handler)
-                local ok, err = coroutine.resume(coro, task, map)
-                if not ok then
-                    log("error", "Task's background_handler failed on start: "..err)
+        if event[1] == "task_update" then
+            while #tasker.event_queue > 0 do
+                local event, task, param = table.unpack(table.remove(tasker.event_queue, 1))
+                if event == "task_disabled" then
+                    if active_tasks:priority(task) ~= nil then
+                        log("debug", "disabling task: "..tostring(task))
+                        active_tasks:remove(task)
+                    end
+                    idle_tasks[task.identifier] = task
+                    task.enabled = false
+                elseif event == "task_enabled" then
+                    if idle_tasks[task.identifier] ~= nil then
+                        log("debug", "enabling task: "..tostring(task))
+                        idle_tasks[task.identifier] = nil
+                    end
+                    active_tasks:push(task, task.priority)
+                    task.enabled = true
+                elseif event == "task_priority" then
+                    task.priority = param
+                    if active_tasks:priority(task) ~= nil then
+                        log("debug", "changed task priority to "..task.priority..": "..tostring(task))
+                        active_tasks:push(task, task.priority)
+                    end
+                elseif event == "task_register" then
+                    task.active_map = map
+                    idle_tasks[task.identifier] = task
+                    log("debug", "registering new task: "..tostring(task))
+                    local ok, err = pcall(task.on_map_update, task)
+                    if not ok then
+                        log("error", "Task's 'on_map_update' method failed: "..err)
+                    end
+                    if type(task.background_handler) == "function" then
+                        local coro = coroutine.create(task.background_handler)
+                        local ok, err = coroutine.resume(coro, task, map)
+                        if not ok then
+                            log("error", "Task's background_handler failed on start: "..err)
+                        end
+                        if coroutine.status(coro) ~= "dead" then
+                            task_threads[task.identifier] = coro
+                        end
+                    end
+                elseif event == "task_unregister" then
+                    if idle_tasks[task.identifier] then
+                        log("debug", "deleting idle task: "..tostring(task))
+                        idle_tasks[task.identifier] = nil
+                    else
+                        log("debug", "deleting active task: "..tostring(task))
+                        if current_task == task then
+                            current_task = nil
+                        end
+                        active_tasks:remove(task)
+                    end
                 end
-                if coroutine.status(coro) ~= "dead" then
-                    task_threads[task.identifier] = coro
-                end
             end
-        elseif event[1] == "task_unregister" then
-            task = event[2]
-            if idle_tasks[task.identifier] then
-                log("debug", "deleting idle task: "..tostring(task))
-                idle_tasks[task.identifier] = nil
-            else
-                log("debug", "deleting active task: "..tostring(task))
-                if current_task == task then
-                    current_task = nil
-                end
-                active_tasks:remove(task)
-            end
-        end
-        if map_updated then
-            map_updated = false
-            log("debug", "saving map.")
-            save_map()
         end
     end
 end
 
 local function do_tasks()
     while true do
-        log("debug", "about to select a task to run")
         local current_pos, current_dir = tracker.get_position(), tracker.get_direction()
         local all_tasks = {}        ---@type {[integer]: Task}
         local ran_task = false
 
         while #active_tasks > 0 do
             local first_task = active_tasks:pop()
+            log("debug", "about to select a task to run: first task is "..tostring(first_task))
 
             if first_task then
                 local first_positions, first_directions = first_task:positions(current_pos, current_dir)
@@ -921,8 +948,8 @@ local function do_tasks()
                 all_tasks[first_task.identifier] = first_task
                 current_priority = first_task.priority
                 log("debug", "enumerating tasks of priority "..current_priority..".")
-                local total_positions = 0
-                local total_tasks = 0
+                local total_positions = #first_positions
+                local total_tasks = 1
 
                 while active_tasks:next_priority() == current_priority do
                     total_tasks = total_tasks + 1
@@ -974,7 +1001,7 @@ local function do_tasks()
                             total_positions = total_positions - 1
                             log("debug", "searching a path to "..tostring(closest_position)..".")
 
-                            if seen[closest_position:hash()..closest_direction..tostring(task.timing_cost)] == nil then
+                            if seen[closest_position:hash()..tostring(closest_direction)..tostring(task.timing_cost)] == nil then
                                 local path = map:find_path(current_pos, current_dir, closest_position, closest_direction, task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH and tasker.walkable_life_or_death or tasker.walkable_safe, task.path_costs)
                                 if path ~= nil and #path - 1 < best_distance then
                                     best_distance = #path - 1
@@ -983,7 +1010,7 @@ local function do_tasks()
                                     best_task = task
                                     log("debug", "found a new best path with distance "..best_distance..".")
                                 end
-                                seen[closest_position:hash()..closest_direction..tostring(task.timing_cost)] = true
+                                seen[closest_position:hash()..tostring(closest_direction)..tostring(task.timing_cost)] = true
                             end
                         end
                     end
@@ -993,7 +1020,7 @@ local function do_tasks()
                     log("warning", "could not find a best path among the tasks to run of priority "..current_priority..".")
                     log("info", "warning tasks of their unreachability.")
                     for identifier, task in pairs(all_tasks) do
-                        local ok, err_or_disable = pcall(tasker.Task.on_no_reacheable_positions, task, current_pos, current_dir)
+                        local ok, err_or_disable = pcall(task.on_no_reacheable_positions, current_pos, current_dir)
                         if not ok then
                             log("error", "a task failed to answer the call to 'on_no_reachable_positions': "..tostring(task)..": "..err_or_disable)
                         else
@@ -1010,14 +1037,19 @@ local function do_tasks()
                         local arrived = false
                         current_task = best_task
                         if best_task.timing_cost == tasker.TIMING_COST.NEAR then
+                            log("debug", "moving to destination using NEAR priority.")
                             arrived = move_to_NEAR(best_position, best_direction)
                         elseif best_task.timing_cost == tasker.TIMING_COST.AROUND then
+                            log("debug", "moving to destination using AROUND priority.")
                             arrived = move_to_AROUND(best_position, best_direction)
                         elseif best_task.timing_cost == tasker.TIMING_COST.QUICK then
+                            log("debug", "moving to destination using QUICK priority.")
                             arrived = move_to_QUICK(best_position, best_direction)
                         elseif best_task.timing_cost == tasker.TIMING_COST.URGENT then
+                            log("debug", "moving to destination using URGENT priority.")
                             arrived = move_to_URGENT(best_position, best_direction)
                         elseif best_task.timing_cost == tasker.TIMING_COST.LIFE_OR_DEATH then
+                            log("debug", "moving to destination using LIFE_OR_DEATH priority.")
                             arrived = move_to_LIFE_OR_DEATH(best_position, best_direction)
                         end
                         if arrived then
@@ -1051,19 +1083,22 @@ local is_mandatory = {
     [run_background_threads] = true,
     [answer_requests] = false,
     [forget_blocks] = false,
-    [do_tasks] = true
+    [do_tasks] = true,
+    [handle_map] = false
 }
 local functions = {
     run_background_threads = run_background_threads,
     answer_requests = answer_requests,
     forget_blocks = forget_blocks,
-    do_tasks = do_tasks
+    do_tasks = do_tasks,
+    handle_map = handle_map
 }
 local order = {
     "run_background_threads",
     "answer_requests",
     "forget_blocks",
-    "do_tasks"
+    "do_tasks",
+    "handle_map"
 }
 local threads = {}
 
@@ -1106,3 +1141,6 @@ end
 
 _G.scheduler = nil
 log_file.close()
+if close_map ~= nil then
+    close_map()
+end
